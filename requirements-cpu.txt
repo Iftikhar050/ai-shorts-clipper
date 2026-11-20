@@ -1,0 +1,28 @@
+# CPU-only install (no GPU). Same as requirements.txt minus the heavy GPU/ML stack:
+#   removed: ultralytics (YOLO face detection, AGPL-3.0)
+#            pyannote.audio (speaker diarization)
+#            torch, torchaudio
+# Features that need them (--face-detector yolo, --split-screen with diarization,
+# --camera-switch, hybrid/split-screen YOLO tracking) are unavailable in this install.
+# Use the default MediaPipe face detector instead.
+yt-dlp
+faster-whisper
+google-genai
+openai>=2.6,<3
+httpx>=0.27,<1
+jsonschema>=4.23,<5
+numpy<2.0.0
+mediapipe
+opencv-python
+Pillow
+requests
+python-dotenv
+google-api-python-client
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+fastapi
+uvicorn
+python-multipart
+pydantic
+edge-tts
