@@ -7,6 +7,9 @@
 # Use the default MediaPipe face detector instead.
 yt-dlp
 faster-whisper
+# av 19 removed the `metadata_errors` argument that faster-whisper 1.2.1 passes
+# to av.open(), so Whisper crashes with TypeError while decoding audio.
+av<19
 google-genai
 openai>=2.6,<3
 httpx>=0.27,<1
