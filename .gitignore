@@ -45,3 +45,4 @@ video_asli.*
 *.ytdl
 *.log
 /*.ttf
+*cookies*.txt
