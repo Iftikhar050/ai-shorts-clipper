@@ -13,6 +13,8 @@ import time
 from yt_dlp import YoutubeDL
 from faster_whisper import WhisperModel
 
+from clipping.accounts import DEFAULT_ACCOUNTS
+
 
 # ==============================================================================
 # TAHAP 1: DOWNLOAD VIDEO
@@ -482,35 +484,45 @@ def transcribe_video(
 # TAHAP 3: ANALISIS GEMINI AI
 # ==============================================================================
 
-TARGET_ACCOUNTS = {
-    "Business": {
-        "akun_tujuan": "Business.Mereska",
-        "angle_desc": "Kalau angle-nya bisnis, brand, omzet, jualan, founder, marketing, atau UMKM.",
-        "bio": "Insight bisnis, founder story & brand lokal. Business | Founder | Finance | Beauty | Marketing"
-    },
-    "Life": {
-        "akun_tujuan": "Life.Mereska",
-        "angle_desc": "Kalau angle-nya personal life, lifestyle, skincare, career, mindset, relationship, personal finance, atau self growth.",
-        "bio": "Klip insight buat upgrade hidup & mindset. Podcast | Career | Finance | Beauty | Self Growth"
-    },
-    "Creator": {
-        "akun_tujuan": "Creator.Mereska",
-        "angle_desc": "Kalau angle-nya konten digital, AI, affiliate, tools, clipping, monetisasi, atau cara menghasilkan uang dari konten.",
-        "bio": "Ngulik konten digital biar bisa jadi uang. AI | Affiliate | Clips | Tools | Monetize"
-    },
-    "Muslim": {
-        "akun_tujuan": "Muslim.Mereska",
-        "angle_desc": "Kalau angle-nya religi, rezeki, doa, ibadah, kerja karena Allah, keluarga Islami, atau bisnis dengan nilai Islam.",
-        "bio": "Reminder kerja, rezeki & hidup bernilai Islam. Islamic | Rezeki | Family | Work | Business"
-    }
-}
+# Default target accounts when no accounts file is configured. Your own
+# accounts are loaded from accounts.json (see clipping/accounts.py).
+TARGET_ACCOUNTS = DEFAULT_ACCOUNTS
 
-def _build_account_classification_prompt() -> str:
+
+def _accounts_for(cfg) -> dict:
+    return getattr(cfg, "target_accounts", None) or TARGET_ACCOUNTS
+
+
+def _build_account_classification_prompt(accounts: dict | None = None) -> str:
     lines = []
-    for tipe, data in TARGET_ACCOUNTS.items():
+    for tipe, data in (accounts or TARGET_ACCOUNTS).items():
         lines.append(f"- {tipe}: {data['angle_desc']}")
-        lines.append(f"  (akun_tujuan: \"{data['akun_tujuan']}\", bio: \"{data['bio']}\")")
+        lines.append(f"  (akun_tujuan: \"{data['akun_tujuan']}\", bio: \"{data.get('bio', '')}\")")
     return "\n".join(lines)
+
+
+def _build_account_section(cfg) -> str:
+    """Prompt section that tells the model how to fill ``klasifikasi_akun``."""
+    accounts = _accounts_for(cfg)
+    if not getattr(cfg, "account_classify", True) or list(accounts) == ["General"]:
+        return (
+            "KLASIFIKASI AKUN TUJUAN:\n"
+            'Untuk setiap klip isi klasifikasi_akun dengan tipe_akun "General" dan akun_tujuan "General" '
+            "(alternatif_akun juga General). Tidak perlu analisis akun."
+        )
+    rules = getattr(cfg, "account_rules", None) or []
+    rules_text = ""
+    if rules:
+        rules_text = "\n\nATURAN KHUSUS KLASIFIKASI:\n" + "\n".join(
+            f"{i}. {rule}" for i, rule in enumerate(rules, 1)
+        )
+    return (
+        "KLASIFIKASI AKUN TUJUAN (UNTUK SETIAP KLIP):\n"
+        "Tentukan akun tujuan berdasarkan ANGLE video dari klip tersebut, bukan hanya topiknya. "
+        "tipe_akun HARUS salah satu dari nama akun di bawah ini, dan akun_tujuan HARUS handle akun tersebut:\n"
+        f"{_build_account_classification_prompt(accounts)}"
+        f"{rules_text}"
+    )
 
 
 # ---- Retry Config ----
@@ -620,6 +632,11 @@ MAX_CLIP_DURATION = 179
 
 def get_analysis_prompt(transkrip_lengkap: str, jumlah_clip: int, durasi_hook: int, cfg=None) -> str:
     """Centralized prompt for both Gemini and NVIDIA providers."""
+    # Example values for the klasifikasi_akun block, taken from the configured accounts
+    _acc = list(_accounts_for(cfg).items())
+    _ex_tipe, _ex_akun = _acc[0][0], _acc[0][1]["akun_tujuan"]
+    _alt_tipe, _alt_akun = (_acc[1][0], _acc[1][1]["akun_tujuan"]) if len(_acc) > 1 else (_ex_tipe, _ex_akun)
+
     # Build optional Hook V2 prompt section
     _hook_v2_prompt = ""
     if cfg and getattr(cfg, "hook_v2", False):
@@ -719,14 +736,7 @@ Panduan penilaian:
 - Payoff/retention: seberapa jelas reward menonton sampai akhir, seperti punchline, insight, twist, kesimpulan, atau pelajaran praktis.
 - Jangan pilih klip dengan viral_score di bawah 70 kecuali jumlah momen bagus di transkrip sangat terbatas.
 
-KLASIFIKASI AKUN TUJUAN (UNTUK SETIAP KLIP):
-Tentukan akun tujuan berdasarkan ANGLE video dari klip tersebut. Jangan menilai hanya dari topik (misal: beauty tidak otomatis masuk Life). Nilai berdasarkan angle:
-{_build_account_classification_prompt()}
-
-ATURAN KHUSUS KLASIFIKASI:
-1. Beauty tidak otomatis masuk Life. (Bahas omzet/brand -> Business. Review/lifestyle -> Life. Affiliate/konten -> Creator).
-2. Finance tidak otomatis masuk Business. (Bahas omzet/bisnis -> Business. Personal finance/nabung -> Life. Cara bikin konten finance -> Creator).
-3. Owner story dibagi berdasarkan angle. (Perjuangan brand -> Business. Kehidupan pribadi/keluarga -> Life. Rezeki/ibadah -> Muslim).
+{_build_account_section(cfg)}
 
 HOOK (WAJIB):
 - Ambil 1 kalimat paling punchy yang ADA DI DALAM klip.
@@ -930,16 +940,16 @@ STRUKTUR JSON WAJIB (Ikuti nama field ini secara kaku):
     "tiktok_caption": "...",
     "alasan": "...",
     "klasifikasi_akun": {{
-      "tipe_akun": "Creator",
-      "akun_tujuan": "Creator.Mereska",
+      "tipe_akun": "{_ex_tipe}",
+      "akun_tujuan": "{_ex_akun}",
       "confidence": 87,
-      "angle_utama": "Monetisasi konten digital dari niche beauty",
+      "angle_utama": "...",
       "alasan": "...",
-      "kata_kunci_pendukung": ["affiliate", "monetisasi"],
+      "kata_kunci_pendukung": ["...", "..."],
       "bio_akun": "...",
       "alternatif_akun": {{
-        "tipe_akun": "Life",
-        "akun_tujuan": "Life.Mereska",
+        "tipe_akun": "{_alt_tipe}",
+        "akun_tujuan": "{_alt_akun}",
         "alasan": "..."
       }}
     }}
@@ -957,7 +967,7 @@ def analyze_with_nvidia(transkrip_lengkap: str, cfg) -> list[dict]:
     from clipping.providers.schema import build_clips_schema
 
     prompt = get_analysis_prompt(transkrip_lengkap, cfg.jumlah_clip, cfg.durasi_hook, cfg=cfg)
-    return NvidiaNimProvider.from_cfg(cfg).generate_clips(prompt, build_clips_schema(TARGET_ACCOUNTS))
+    return NvidiaNimProvider.from_cfg(cfg).generate_clips(prompt, build_clips_schema(_accounts_for(cfg)))
 
 
 def analyze_with_vllm(transkrip_lengkap: str, cfg) -> list[dict]:
@@ -969,7 +979,7 @@ def analyze_with_vllm(transkrip_lengkap: str, cfg) -> list[dict]:
     with VllmProvider.from_cfg(cfg) as provider:
         return provider.generate_clips(
             prompt,
-            build_clips_schema(TARGET_ACCOUNTS),
+            build_clips_schema(_accounts_for(cfg)),
             transcript=transkrip_lengkap,
             requested_clips=cfg.jumlah_clip,
             min_duration=MIN_CLIP_DURATION,
@@ -1007,4 +1017,4 @@ def analyze_with_gemini(transkrip_lengkap: str, cfg) -> list[dict]:
         generate_json=_generate_json_with_retry,
         timeout_ms=REQUEST_TIMEOUT_MS,
     )
-    return provider.generate_clips(prompt, build_gemini_schema(TARGET_ACCOUNTS))
+    return provider.generate_clips(prompt, build_gemini_schema(_accounts_for(cfg)))

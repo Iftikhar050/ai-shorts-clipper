@@ -68,8 +68,11 @@ def cfg():
     ("provider", "builder"),
     [("gemini", build_gemini_schema), ("nvidia", build_clips_schema)],
 )
-def test_schema_matches_pre_refactor_snapshot(engine, provider, builder):
-    actual = builder(engine.TARGET_ACCOUNTS)
+def test_schema_matches_pre_refactor_snapshot(provider, builder):
+    # The snapshot was frozen with the upstream account names. Accounts are now
+    # configurable (clipping/accounts.py); the builder contract is unchanged.
+    upstream_accounts = {"Business": {}, "Life": {}, "Creator": {}, "Muslim": {}}
+    actual = builder(upstream_accounts)
     expected = _snapshot(provider)
     assert actual == expected
     # Preserve property order as well as required/enum list ordering.
@@ -122,6 +125,8 @@ def test_nim_facade_preserves_full_request_and_prompt_patch(engine, cfg, nim_sdk
         return "Patched analysis prompt"
 
     monkeypatch.setattr(engine, "get_analysis_prompt", prompt)
+    # Accounts come from cfg (accounts.json); use the snapshot's account names.
+    cfg.target_accounts = {"Business": {}, "Life": {}, "Creator": {}, "Muslim": {}}
     assert engine.analyze_with_nvidia("Test transcript", cfg) == CLIPS
     assert prompts == [("Test transcript", 1, 5, cfg)]
     # Do not add application retry/timeout overrides to the legacy SDK defaults.

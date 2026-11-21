@@ -1,0 +1,23 @@
+{
+  "accounts": {
+    "Sports": {
+      "handle": "@yourname.sports",
+      "angle_desc": "Match highlights, records, milestones, player moments, rivalries and big wins or collapses.",
+      "bio": "Best moments from cricket and football, every day."
+    },
+    "Science": {
+      "handle": "@yourname.science",
+      "angle_desc": "Health, brain, psychology and science explainers with a practical takeaway.",
+      "bio": "Short science that changes how you live."
+    },
+    "General": {
+      "handle": "@yourname",
+      "angle_desc": "Anything that does not clearly fit another account.",
+      "bio": "Clips worth your time."
+    }
+  },
+  "rules": [
+    "An athlete talking about health, sleep or mental performance goes to Science, not Sports.",
+    "Use General only when no other account clearly fits."
+  ]
+}

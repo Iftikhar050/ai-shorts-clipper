@@ -478,6 +478,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Load the saved gemini_response.json from outputs dir to bypass the AI generation step (useful for debugging)",
     )
     p.add_argument(
+        "--accounts-file",
+        default=None,
+        help="JSON file with your target accounts for clip classification "
+             "(default: accounts.json in the working directory if present, "
+             "otherwise a single built-in 'General' account). See accounts.example.json.",
+    )
+    p.add_argument(
+        "--no-account-classify",
+        action="store_true",
+        help="Skip target-account classification (shorter prompt; every clip goes to 'General').",
+    )
+    p.add_argument(
         "--box-face-detection",
         action="store_true",
         help="Draw a yellow bounding box around the detected face for debugging/tracking visualization",
@@ -788,6 +800,15 @@ def build_config(argv: list[str] | None = None) -> SimpleNamespace:
                 )
 
     base_dir = os.getcwd()
+
+    from clipping.accounts import AccountsError, resolve_accounts
+    try:
+        target_accounts, account_rules, accounts_source = resolve_accounts(
+            args.accounts_file, base_dir, classify=not args.no_account_classify
+        )
+    except AccountsError as exc:
+        parser.error(str(exc))
+
     outputs_dir = os.path.abspath(os.path.join(base_dir, "outputs"))
     os.makedirs(outputs_dir, exist_ok=True)
     font_dir = os.path.abspath(os.path.join(base_dir, "custom_fonts"))
@@ -890,6 +911,11 @@ def build_config(argv: list[str] | None = None) -> SimpleNamespace:
         gemini_model=args.gemini_model,
         gemini_fallback_model=args.gemini_fallback_model,
         load_gemini_json=args.load_gemini_json,
+        # Target-account classification
+        target_accounts=target_accounts,
+        account_rules=account_rules,
+        accounts_source=accounts_source,
+        account_classify=not args.no_account_classify,
         # Tracking Tuning
         track_step=args.track_step,
         track_deadzone=args.track_deadzone,

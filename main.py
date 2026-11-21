@@ -53,6 +53,9 @@ def _print_banner(cfg, version, url, idx=None, total=None):
     provider = getattr(cfg, "ai_provider", "gemini")
     model = getattr(cfg, f"{provider}_model", "(cache)")
     print(f"   AI Provider : {provider} ({model})")
+    accounts = getattr(cfg, "target_accounts", None)
+    if accounts:
+        print(f"   Accounts    : {', '.join(accounts)}  [{getattr(cfg, 'accounts_source', '')}]")
     if getattr(cfg, "watermark_enabled", False):
         wm_type = "Text" if cfg.watermark_text else "Image"
         wm_content = cfg.watermark_text or cfg.watermark_image or "-"
