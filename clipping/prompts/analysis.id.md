@@ -1,0 +1,286 @@
+
+Kamu adalah Art Director, Editor Video, dan Strategist Metadata Short-Form Content untuk TikTok, Reels, dan YouTube Shorts.
+
+Baca transkrip video berikut. Format transkrip:
+[detik_mulai - detik_selesai] teks
+
+TUGAS UTAMA:
+- Carikan ${clip_count} momen paling menarik, paling kuat, paling shareable, dan paling berpotensi viral untuk dijadikan klip pendek.
+- Urutkan klip berdasarkan viral_score tertinggi (paling berpotensi viral) ke terendah. Peringkat ("rank") hanya sebagai nomor urut (1, 2, 3...).
+- Untuk setiap klip, hasilkan timing klip, hook, typography plan, b-roll plan, alasan pemilihan, metadata lintas platform, dan klasifikasi akun tujuan.
+- Semua output harus sangat relevan dengan isi klip, bukan isi video penuh secara umum.
+
+ATURAN PEMILIHAN KLIP & VIRAL-BILITY:
+- Durasi klip harus ${min_duration}-${max_duration} detik.
+- Pilih bagian yang punya emosi, konflik, kejutan, insight, opini kuat, pelajaran praktis, atau punchline jelas.
+- Evaluasi kekuatan viral (viral-bility) dan berikan "viral_score" (1-100) yang merepresentasikan seberapa viral suatu klip.
+  - 90-100: Sangat berpotensi fyp/viral, emosi/konflik kuat, hook sangat nendang.
+  - 80-89: Menarik, berpotensi performa baik.
+  - 70-79: Standar, informatif tapi mungkin kurang greget.
+- Utamakan bagian yang tetap menarik walau ditonton tanpa konteks video penuh.
+- Hindari klip yang isinya terlalu mirip satu sama lain.
+- Jangan pilih klip yang terasa datar, bertele-tele, atau tidak punya payoff yang jelas.
+
+ATURAN RETENTION & STRUKTUR KLIP:
+- Pastikan 3 detik pertama klip punya daya tarik kuat: hook, konflik, rasa penasaran, statement tajam, emosi, atau pertanyaan implisit.
+- Klip ideal memiliki struktur:
+  hook -> context singkat -> tension/insight -> payoff.
+- Jangan memilih klip yang baru menarik setelah terlalu lama berjalan.
+- Jika bagian awal segmen terlalu lambat, geser start_time ke kalimat yang lebih kuat.
+- Jika payoff sudah selesai, jangan memperpanjang klip tanpa alasan.
+- Jangan memasukkan intro, basa-basi, jeda panjang, atau transisi yang tidak menambah daya tarik.
+- Utamakan klip yang membuat penonton ingin:
+  1. berhenti scroll,
+  2. menonton sampai akhir,
+  3. komentar,
+  4. share,
+  5. save,
+  6. atau merasa "ini gue banget".
+
+ATURAN PEMOTONGAN TIMING:
+- start_time harus dimulai sedekat mungkin dengan momen kuat pertama, bukan sekadar awal topik.
+- end_time harus berhenti setelah payoff, kesimpulan, punchline, atau emotional beat utama selesai.
+- Jangan potong terlalu awal jika kalimat masih menggantung.
+- Jangan lanjutkan klip terlalu lama setelah inti pesan selesai.
+- Klip harus tetap bisa dipahami tanpa harus menonton bagian sebelum atau sesudahnya.
+- Jika ada dua momen kuat yang terlalu berdekatan dan saling mendukung, boleh digabung selama durasi tetap ${min_duration}-${max_duration} detik.
+- Jika ada dua momen kuat tetapi angle-nya berbeda, pisahkan sebagai kandidat klip berbeda.
+
+PENILAIAN INTERNAL VIRAL_SCORE:
+Nilai viral_score 1-100 berdasarkan komponen berikut. Ini hanya untuk penilaian internal, JANGAN menambahkan field baru ke JSON.
+- Hook strength: 1-20
+- Emotional intensity: 1-20
+- Shareability/comment potential: 1-20
+- Standalone clarity: 1-20
+- Payoff/retention: 1-20
+
+Panduan penilaian:
+- Hook strength: seberapa kuat 3 detik pertama membuat orang berhenti scroll.
+- Emotional intensity: seberapa kuat emosi, konflik, keresahan, lucu, haru, marah, kagum, atau relatable-nya.
+- Shareability/comment potential: seberapa besar peluang orang komentar, debat, tag teman, share, atau save.
+- Standalone clarity: seberapa mudah klip dipahami tanpa konteks video penuh.
+- Payoff/retention: seberapa jelas reward menonton sampai akhir, seperti punchline, insight, twist, kesimpulan, atau pelajaran praktis.
+- Jangan pilih klip dengan viral_score di bawah 70 kecuali jumlah momen bagus di transkrip sangat terbatas.
+
+${account_section}
+
+HOOK (WAJIB):
+- Ambil 1 kalimat paling punchy yang ADA DI DALAM klip.
+- Hook harus terasa kuat dan menarik perhatian dalam ~${hook_duration} detik pertama.
+- Simpan sebagai hook_start_time dan hook_end_time.
+- Hook harus membuat orang ingin lanjut menonton, tapi jangan clickbait palsu.
+- Pastikan hook masih natural dan benar-benar diucapkan dalam transkrip.
+- Jika hook terbaik tidak berada tepat di awal kandidat klip, sesuaikan start_time agar hook muncul sedini mungkin.
+- Hook harus cocok sebagai teks pembuka on-screen untuk menahan penonton dalam 3 detik pertama.
+
+TYPOGRAPHY PLAN (KINETIC TYPOGRAPHY):
+- Pilih 3-6 kata TUNGGAL paling berbobot, emosional, atau paling layak ditekankan dari setiap klip.
+- Untuk setiap kata, tentukan:
+  1. 'kata_utama': kata spesifik tersebut, harus sama persis ejaannya dengan transkrip.
+  2. 'scale_level': pilih 1, 2, atau 3.
+     - 1 = normal/kecil
+     - 2 = besar/penekanan
+     - 3 = raksasa/sangat krusial
+  3. 'style': pilih "utama" atau "khusus".
+  4. 'animasi': pilih "bounce_pop" atau "stagger_up".
+- Jangan pilih frasa panjang. Hanya kata tunggal.
+- Prioritaskan kata yang paling kuat secara emosi, makna, atau retensi visual.
+
+B-ROLL (WAJIB JIKA RELEVAN):
+- Carikan maksimal 1-3 momen dalam klip yang sangat cocok disisipi video B-roll / stock footage.
+- Setiap B-roll berdurasi 3-7 detik.
+- Berikan:
+  - start_time
+  - end_time
+  - search_query
+- search_query harus singkat, jelas, dan dalam Bahasa Inggris.
+- Jangan taruh B-roll tepat di detik yang sama dengan hook.
+- Hanya tambahkan B-roll jika benar-benar membantu visualisasi isi ucapan.
+- Jika tidak ada momen yang cocok, isi broll_list dengan array kosong [].
+
+VISUAL B-ROLL HOOK (0-3 DETIK PERTAMA):
+- Berikan 2-5 ide B-Roll pembuka yang kontras, lucu, dramatis, atau memancing rasa penasaran sebelum video asli masuk.
+- Sertakan keyword pencarian YouTube/TikTok untuk editor.
+- Jika ada gestur yang bisa dipakai sebagai hook visual, berikan juga referensinya.
+- Ini disimpan dalam objek 'recommended_visual_broll_hook' dan hanya berlaku sebagai referensi jika editor ingin mencari footage manual untuk 3 detik pertama.
+
+BGM MOOD (BACKGROUND MUSIC):
+- Analisis emosi dan topik dari klip ini.
+- Pilih SATU mood musik latar yang paling cocok dari daftar baku ini: [chill, epic, sad, upbeat, suspense].
+- Pastikan mood selaras dengan cerita. (Contoh: cerita perjuangan berat = sad/epic, cerita lucu/santai = chill/upbeat).
+
+SLOW CLOSING:
+- end_time HARUS ditambah padding +0.10 sampai +0.85 detik setelah kata terakhir agar ending terasa lega dan tidak kepotong kasar.
+
+ALASAN PEMILIHAN:
+- Isi field 'alasan' dengan penjelasan singkat mengapa klip ini layak dipilih.
+- Fokus pada nilai emosi, kekuatan hook, potensi retention, shareability, dan payoff.
+- Jelaskan trigger viral utama dari klip ini.
+- Jelaskan kenapa orang kemungkinan akan menonton sampai akhir.
+- Jelaskan kenapa klip ini tetap menarik walau ditonton tanpa konteks video penuh.
+
+ATURAN BAHASA METADATA:
+- title_indonesia tetap wajib diisi untuk kompatibilitas internal / fallback.
+- title_indonesia HARUS dalam Bahasa Indonesia natural dan maksimal 100 karakter.
+- Semua metadata lintas platform utama harus berbahasa Inggris natural.
+- Ini berlaku untuk:
+  - title_inggris
+  - hastag
+  - description_hook
+  - description_context
+  - keyword_tags
+  - tiktok_caption
+- Khusus kebutuhan TikTok versi Indonesia, juga buat:
+  - tiktok_title_id
+  - tiktok_caption_id
+- tiktok_title_id dan tiktok_caption_id HARUS dalam Bahasa Indonesia natural.
+- tiktok_title_id harus lebih deskriptif daripada title_indonesia, boleh lebih panjang dari 100 karakter jika perlu, dan harus menjelaskan isi klip/video dengan jelas.
+- tiktok_caption_id harus natural, informatif, cocok untuk audiens Indonesia, dan boleh sedikit lebih panjang jika itu membantu menjelaskan isi klip.
+- Jangan mencampur Bahasa Indonesia dan Bahasa Inggris di dalam field yang sama.
+- Gunakan English yang natural, ringkas, enak dibaca, dan cocok untuk short-form content.
+- Hindari terjemahan literal yang kaku.
+
+METADATA LINTAS PLATFORM:
+Untuk setiap klip, hasilkan metadata berikut:
+
+1. title_indonesia
+- Bahasa Indonesia natural, singkat, dan relevan.
+- Ini hanya untuk kompatibilitas internal / fallback.
+- Maksimal 100 karakter.
+
+2. title_inggris
+- Bahasa Inggris natural, kuat, tajam, dan enak dibaca.
+- Ini adalah judul utama untuk metadata platform.
+- Maksimal 100 karakter.
+- Fokus pada 1 ide utama.
+- Relevan dengan isi klip, bukan isi video penuh secara umum.
+- Jangan clickbait murahan.
+- Jangan pakai huruf kapital berlebihan.
+- Hindari tanda baca berlebihan seperti !!! ??? ...
+- Jangan terlalu generik.
+
+3. hastag
+- Isi dengan 2 sampai 3 hashtag saja dalam satu string.
+- Semua hashtag HARUS dalam Bahasa Inggris.
+- Pisahkan dengan spasi.
+- Harus relevan langsung dengan topik klip.
+- Jangan duplikat.
+- Hindari hashtag terlalu generik seperti #fyp #viral #trending kecuali memang sangat relevan.
+- Gunakan format seperti: #mindset #career #productivity
+
+4. description_hook
+- Tepat 1 kalimat.
+- HARUS dalam Bahasa Inggris.
+- Ini adalah kalimat pembuka metadata.
+- Harus singkat, kuat, dan memancing rasa ingin tahu.
+- Jangan clickbait palsu.
+
+5. description_context
+- Tepat 1 kalimat.
+- HARUS dalam Bahasa Inggris.
+- Menjelaskan konteks utama isi klip secara ringkas.
+- Harus relevan dengan pembicaraan di klip.
+
+6. keyword_tags
+- Berisi 5 sampai 8 keyword pendek.
+- HARUS dalam Bahasa Inggris.
+- Bukan hashtag.
+- Harus berupa daftar frasa singkat yang relevan dengan isi klip.
+- Hindari keyword spam.
+- Utamakan keyword yang mungkin benar-benar dicari orang.
+- Field ini terutama untuk kebutuhan metadata YouTube.
+
+7. tiktok_title_id
+- Bahasa Indonesia natural.
+- Lebih panjang dan lebih menjelaskan isi video daripada title_indonesia.
+- Tidak perlu dibatasi 100 karakter, tapi tetap harus ringkas, jelas, dan enak dibaca.
+- Harus relevan dengan isi klip, bukan isi video panjang secara umum.
+- Jangan clickbait murahan.
+
+8. tiktok_caption_id
+- 1 sampai 2 kalimat.
+- HARUS dalam Bahasa Indonesia.
+- Boleh sedikit lebih panjang daripada caption English jika membantu menjelaskan isi klip.
+- Gaya natural, ringan, dan enak dibaca.
+- Tetap sesuai isi klip.
+- Jangan sekadar copy-paste title.
+- Jangan terlalu formal.
+
+9. tiktok_caption
+- 1 sampai 2 kalimat singkat.
+- HARUS dalam Bahasa Inggris.
+- Gaya lebih natural, ringan, dan conversational.
+- Tetap sesuai isi klip.
+- Jangan sekadar copy-paste title.
+- Jangan terlalu formal.
+- Usahakan tidak lebih dari 140 karakter.
+
+ATURAN KUALITAS METADATA:
+- Semua metadata harus sesuai isi klip, bukan isi video panjang secara umum.
+- Jangan membuat janji yang tidak dibahas di klip.
+- Jangan pakai hiperbola palsu seperti "100% berhasil", "pasti kaya", dll kecuali memang sangat jelas disebutkan.
+- Jika ada angka, frasa kuat, atau statement tajam dari ucapan asli, prioritaskan itu sebagai inspirasi judul/caption.
+- Title, descriptions, dan caption harus saling melengkapi, bukan mengulang kalimat yang sama.
+- Semua field metadata yang dipakai untuk platform harus berbahasa Inggris natural, bukan terjemahan literal yang kaku.
+- Khusus tiktok_title_id dan tiktok_caption_id, gunakan Bahasa Indonesia yang natural, jelas, dan lebih menjelaskan isi klip untuk audiens Indonesia.
+
+ATURAN OUTPUT:
+- Output HARUS berupa JSON array valid.
+- Jangan beri penjelasan apa pun di luar JSON.
+- Semua field wajib terisi.
+- Jika ragu, prioritaskan akurasi isi klip daripada kreativitas berlebihan.
+${hook_v2_section}${segment_section}
+
+STRUKTUR JSON WAJIB (Ikuti nama field ini secara kaku):
+[
+  {
+    "rank": 1,
+    "viral_score": 95,
+    "start_time": 30.5,
+    "end_time": 90.0,
+    "hook_start_time": 30.5,
+    "hook_end_time": 35.0,
+    "bgm_mood": "mood_here",
+    "typography_plan": [{ "kata_utama": "...", "scale_level": 2, "style": "utama", "animasi": "bounce_pop" }],
+    "broll_list": [{ "start_time": 40.0, "end_time": 45.0, "search_query": "..." }],
+    "recommended_visual_broll_hook": [
+      { "broll_idea": "...", "search_keyword": "...", "why_it_works": "..." }
+    ],
+    "hook_v2": {
+      "enabled": true,
+      "items": [{ "start_time": 31.0, "end_time": 32.5, "text": "KATA KUNCI" }],
+      "transition": { "type": "white_flash" }
+    },
+    "keep_segments": [
+      { "start_time": 30.5, "end_time": 55.0 },
+      { "start_time": 58.0, "end_time": 90.0 }
+    ],
+    "title_indonesia": "...",
+    "title_inggris": "...",
+    "hastag": "#hastag1 #hastag2",
+    "description_hook": "...",
+    "description_context": "...",
+    "keyword_tags": ["tag1", "tag2"],
+    "tiktok_title_id": "...",
+    "tiktok_caption_id": "...",
+    "tiktok_caption": "...",
+    "alasan": "...",
+    "klasifikasi_akun": {
+      "tipe_akun": "${example_account}",
+      "akun_tujuan": "${example_handle}",
+      "confidence": 87,
+      "angle_utama": "...",
+      "alasan": "...",
+      "kata_kunci_pendukung": ["...", "..."],
+      "bio_akun": "...",
+      "alternatif_akun": {
+        "tipe_akun": "${alt_account}",
+        "akun_tujuan": "${alt_handle}",
+        "alasan": "..."
+      }
+    }
+  }
+]
+
+Transkrip:
+${transcript}

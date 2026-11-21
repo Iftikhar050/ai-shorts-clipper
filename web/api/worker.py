@@ -336,9 +336,11 @@ def _run_pipeline_sync(job_id: str, payload: dict) -> None:
         _check_cancelled(job_id)
         # --- Step 4: Metadata ---
         trace.begin("metadata")
-        from clipping import metadata
+        from clipping import metadata, prompts
 
-        hasil_json = metadata.normalize_and_validate(hasil_json)
+        hasil_json = metadata.normalize_and_validate(
+            hasil_json, expect_indonesian=prompts.resolve_language(cfg) == "id"
+        )
         if not hasil_json:
             raise ValueError("AI tidak menghasilkan klip yang valid untuk dirender.")
         metadata_path = os.path.join(cfg.outputs_dir, "metadata_preview.json")

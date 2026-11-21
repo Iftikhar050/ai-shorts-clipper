@@ -61,7 +61,7 @@ def pipeline(monkeypatch, tmp_path):
 
     substitutes = {
         "engine": SimpleNamespace(download_video=download, transcribe_video=transcribe, analyze_with_ai=analyze),
-        "metadata": SimpleNamespace(normalize_and_validate=lambda data: data, save_metadata_preview=lambda *a, **k: None),
+        "metadata": SimpleNamespace(normalize_and_validate=lambda data, **k: data, save_metadata_preview=lambda *a, **k: None),
         "studio": SimpleNamespace(
             _is_vertical_ratio=lambda ratio: ratio == "9:16", _get_render_dims=lambda *a, **k: (1080, 1920),
             detect_video_encoder=lambda *a, **k: "libx264", proses_klip=render,

@@ -485,6 +485,25 @@ def _build_parser() -> argparse.ArgumentParser:
              "otherwise a single built-in 'General' account). See accounts.example.json.",
     )
     p.add_argument(
+        "--prompt-language",
+        choices=["en", "id"],
+        default="en",
+        help="Language of the AI analysis prompt (templates in clipping/prompts/). "
+             "'id' is the original Indonesian prompt with bilingual ID/EN metadata.",
+    )
+    p.add_argument(
+        "--output-language",
+        default="English",
+        help="Language for titles, captions, hashtags and reasons (English prompt only), "
+             "e.g. English, Urdu, Spanish.",
+    )
+    p.add_argument(
+        "--sub-langs",
+        default="en,id",
+        help="Comma-separated YouTube subtitle languages to try, in order, with --use-dlp-subs "
+             "(default: en,id).",
+    )
+    p.add_argument(
         "--no-account-classify",
         action="store_true",
         help="Skip target-account classification (shorter prompt; every clip goes to 'General').",
@@ -916,6 +935,10 @@ def build_config(argv: list[str] | None = None) -> SimpleNamespace:
         account_rules=account_rules,
         accounts_source=accounts_source,
         account_classify=not args.no_account_classify,
+        # Prompt & metadata language
+        prompt_language=args.prompt_language,
+        output_language=args.output_language.strip() or "English",
+        sub_langs=[s.strip() for s in args.sub_langs.split(",") if s.strip()] or ["en", "id"],
         # Tracking Tuning
         track_step=args.track_step,
         track_deadzone=args.track_deadzone,

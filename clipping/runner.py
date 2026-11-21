@@ -50,6 +50,7 @@ def run_pipeline(cfg, whisper_model_instance=None) -> list[dict]:
         getattr(cfg, "download_source_height", "max"),
         source_platform=source_platform,
         yt_cookies=getattr(cfg, "yt_cookies", None),
+        sub_langs=getattr(cfg, "sub_langs", None) or ("en", "id"),
     )
 
     # Step 2 — Transcribe
@@ -114,7 +115,11 @@ def run_pipeline(cfg, whisper_model_instance=None) -> list[dict]:
         save_run_metadata(cfg)
 
     # Step 4 — Metadata normalisation
-    hasil_json = metadata.normalize_and_validate(hasil_json)
+    from clipping import prompts
+
+    hasil_json = metadata.normalize_and_validate(
+        hasil_json, expect_indonesian=prompts.resolve_language(cfg) == "id"
+    )
     metadata.print_preview(hasil_json)
 
     metadata_path = os.path.join(cfg.outputs_dir, "metadata_preview.json")

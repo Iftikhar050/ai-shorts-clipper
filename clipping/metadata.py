@@ -101,7 +101,12 @@ def _looks_indonesian(text):
 # MAIN API
 # ==============================================================================
 
-def normalize_and_validate(hasil_json: list[dict], *, report: list[dict] | None = None) -> list[dict]:
+def normalize_and_validate(
+    hasil_json: list[dict],
+    *,
+    report: list[dict] | None = None,
+    expect_indonesian: bool = True,
+) -> list[dict]:
     """
     Normalize and enrich metadata fields, add *_final fields.
 
@@ -215,19 +220,22 @@ def normalize_and_validate(hasil_json: list[dict], *, report: list[dict] | None 
         if len(yt_desc) < 30:
             warning.append("youtube_description terlalu pendek (< 30 karakter) — terlihat seperti spam")
 
-        if _looks_indonesian(item["title_inggris"]):
-            warning.append("title_inggris terdeteksi bukan English penuh")
-        if _looks_indonesian(item["description_hook"]):
-            warning.append("description_hook terdeteksi bukan English penuh")
-        if _looks_indonesian(item["description_context"]):
-            warning.append("description_context terdeteksi bukan English penuh")
-        if _looks_indonesian(item["tiktok_caption"]):
-            warning.append("tiktok_caption terdeteksi bukan English penuh")
+        # Language checks only apply to the Indonesian prompt's bilingual ID/EN contract.
+        # With the English prompt every field uses the chosen --output-language.
+        if expect_indonesian:
+            if _looks_indonesian(item["title_inggris"]):
+                warning.append("title_inggris terdeteksi bukan English penuh")
+            if _looks_indonesian(item["description_hook"]):
+                warning.append("description_hook terdeteksi bukan English penuh")
+            if _looks_indonesian(item["description_context"]):
+                warning.append("description_context terdeteksi bukan English penuh")
+            if _looks_indonesian(item["tiktok_caption"]):
+                warning.append("tiktok_caption terdeteksi bukan English penuh")
 
-        if item["tiktok_title_id"] and not _looks_indonesian(item["tiktok_title_id"]):
-            warning.append("tiktok_title_id terdeteksi bukan Bahasa Indonesia")
-        if item["tiktok_caption_id"] and not _looks_indonesian(item["tiktok_caption_id"]):
-            warning.append("tiktok_caption_id terdeteksi bukan Bahasa Indonesia")
+            if item["tiktok_title_id"] and not _looks_indonesian(item["tiktok_title_id"]):
+                warning.append("tiktok_title_id terdeteksi bukan Bahasa Indonesia")
+            if item["tiktok_caption_id"] and not _looks_indonesian(item["tiktok_caption_id"]):
+                warning.append("tiktok_caption_id terdeteksi bukan Bahasa Indonesia")
 
         if warning:
             semua_warning.append((rank, warning))

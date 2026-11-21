@@ -53,6 +53,9 @@ def _print_banner(cfg, version, url, idx=None, total=None):
     provider = getattr(cfg, "ai_provider", "gemini")
     model = getattr(cfg, f"{provider}_model", "(cache)")
     print(f"   AI Provider : {provider} ({model})")
+    lang = getattr(cfg, "prompt_language", "en")
+    out_lang = getattr(cfg, "output_language", "English") if lang == "en" else "ID + EN"
+    print(f"   Prompt      : {lang}  (metadata: {out_lang})")
     accounts = getattr(cfg, "target_accounts", None)
     if accounts:
         print(f"   Accounts    : {', '.join(accounts)}  [{getattr(cfg, 'accounts_source', '')}]")
