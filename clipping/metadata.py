@@ -290,6 +290,8 @@ def print_preview(hasil_json: list[dict]) -> None:
         if isinstance(item.get("score_components"), dict):
             comps = ", ".join(f"{k} {v:.2f}" for k, v in item["score_components"].items())
             print(f"Combined Score    : {item['viral_score']} (AI {item.get('ai_viral_score', '?')}) <- {comps}")
+        if item.get("visual_notes"):
+            print(f"Visual Review     : {item.get('visual_score')} - {item['visual_notes']}")
         print(f"Akun Tujuan       : {klasifikasi.get('akun_tujuan', '')} ({klasifikasi.get('tipe_akun', '')})")
         print(f"Alasan Akun       : {klasifikasi.get('alasan', '')}")
         print(f"Title ID          : {item['title_indonesia']}")

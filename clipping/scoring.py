@@ -26,7 +26,7 @@ import re
 from clipping import events as events_mod
 
 BREAKDOWN_KEYS = ("hook", "emotion", "shareability", "clarity", "payoff")
-DEFAULT_WEIGHTS = {"ai": 0.5, "heatmap": 0.3, "comments": 0.2, "audio": 0.1}
+DEFAULT_WEIGHTS = {"ai": 0.5, "heatmap": 0.3, "comments": 0.2, "audio": 0.1, "visual": 0.3}
 HEATMAP_MARK_THRESHOLD = 0.5   # mark transcript lines replayed at >= 50% of the peak
 COMMENT_WINDOW_PAD = 3.0       # seconds of slack around a commented timestamp
 MAX_OVERLAP = 0.5              # re-ranking skips candidates sharing >50% with a better clip
@@ -235,6 +235,7 @@ def rerank(clips: list[dict], signals: dict | None, keep: int, weights: dict | N
     have_comments = _comments_usable(signals)
     ev = (signals or {}).get("events")
     have_audio = bool(ev and ev.get("spikes"))
+    have_visual = any("visual_score" in c for c in clips)
 
     measured = []
     for clip in clips:
@@ -248,11 +249,13 @@ def rerank(clips: list[dict], signals: dict | None, keep: int, weights: dict | N
             comps["comments"] = round(1 - math.exp(-comment_weight_in_window(signals, start, end) / 3), 4)
         if have_audio:
             comps["audio"] = events_mod.audio_score(ev, start, end)
+        if have_visual:
+            comps["visual"] = round(max(0.0, min(1.0, float(clip.get("visual_score", 0)) / 100)), 4)
         measured.append(comps)
 
     # A signal that is 0 for every candidate can't tell them apart; counting it
     # would only drag every score down, so it is dropped.
-    informative = {"ai"} | {k for k in ("heatmap", "comments", "audio")
+    informative = {"ai"} | {k for k in ("heatmap", "comments", "audio", "visual")
                             if any(c.get(k, 0) > 0 for c in measured) and weights.get(k, 0) > 0}
 
     for clip, comps in zip(clips, measured):
@@ -290,8 +293,8 @@ def _overlap_ratio(a: dict, b: dict) -> float:
     return shared / shorter if shorter > 0 else 0.0
 
 
-def candidate_pool(requested: int, signals: dict | None) -> int:
-    """Ask the AI for extra candidates when signals can re-rank them."""
-    if not has_signals(signals):
+def candidate_pool(requested: int, signals: dict | None, force: bool = False) -> int:
+    """Ask the AI for extra candidates when signals (or visual review) can re-rank them."""
+    if not (force or has_signals(signals)):
         return requested
     return min(requested * 2, requested + 5)

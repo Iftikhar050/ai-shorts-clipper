@@ -519,6 +519,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Keep volume-spike detection but skip scene-cut detection (saves a video decode pass).",
     )
     p.add_argument(
+        "--visual-rerank",
+        action="store_true",
+        help="Send a few frames of each candidate clip to Gemini so it can judge what it SEES, "
+             "then re-rank (one extra Gemini request with images; Gemini only).",
+    )
+    p.add_argument(
+        "--visual-frames",
+        type=int,
+        default=6,
+        help="Frames per candidate for --visual-rerank (1-12, default: 6).",
+    )
+    p.add_argument(
         "--use-comments",
         action="store_true",
         help="Also fetch top YouTube comments and use timestamps viewers mention (one extra request).",
@@ -532,7 +544,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--score-weights",
         default="",
-        help="Combined-score weights, e.g. 'ai=0.5,heatmap=0.3,comments=0.2,audio=0.1' (default). "
+        help="Combined-score weights, e.g. 'ai=0.5,heatmap=0.3,comments=0.2,audio=0.1,visual=0.3' (default). "
              "Only signals available for the video are used.",
     )
     p.add_argument(
@@ -871,6 +883,8 @@ def build_config(argv: list[str] | None = None) -> SimpleNamespace:
         score_weights = parse_weights(args.score_weights)
     except ValueError as exc:
         parser.error(str(exc))
+    if not (1 <= args.visual_frames <= 12):
+        parser.error("--visual-frames must be between 1 and 12.")
     if args.max_comments < 1:
         parser.error("--max-comments must be at least 1.")
     if not (0.0 <= args.ai_temperature <= 2.0):
@@ -987,6 +1001,8 @@ def build_config(argv: list[str] | None = None) -> SimpleNamespace:
         audience_signals=not args.no_audience_signals,
         event_markers=not args.no_event_markers,
         scene_detect=not args.no_scene_detect,
+        visual_rerank=args.visual_rerank,
+        visual_frames=args.visual_frames,
         use_comments=args.use_comments,
         max_comments=args.max_comments,
         score_weights=score_weights,

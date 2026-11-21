@@ -84,6 +84,33 @@ Every clip keeps the details in `metadata_preview.json`:
 
 The raw signals are saved to `outputs/audience_signals.json`.
 
+## 4. Visual review (`--visual-rerank`, Gemini only)
+
+The clip picker only reads the transcript. With `--visual-rerank`, the AI is
+asked for extra candidates, then FFmpeg grabs `--visual-frames` (default 6)
+small frames (512 px) spread across each candidate, and ONE extra Gemini
+request scores what it **sees** (0-100):
+
+- visual hook in the first frames
+- visible action or emotion (celebrations, reactions, gestures)
+- variety versus one static shot
+- a clear subject that crops well to vertical 9:16
+- penalties for static slides, black frames, logos, empty scenes
+
+This becomes the `visual` score component (weight 0.3), and each clip keeps
+`visual_score` and `visual_notes`. Example from a cricket highlights video:
+
+| Candidate | AI | Visual | Gemini's note |
+|---|---|---|---|
+| Intro | 88 | 48 | Wide aerial view; distant shots are hard to crop to 9:16 |
+| Century | 91 | 78 | Great celebration hook and close player shots, some dark angles |
+| Bowling spell | 85 | 88 | Dynamic action with tight framing, ideal for vertical |
+
+It is opt-in because it adds images to the Gemini request (about 6 frames x
+6 candidates for 3 clips). It is skipped with `--load-gemini-json` or
+non-Gemini providers, and if it fails the run continues with the normal
+ranking.
+
 ## Flags
 
 | Flag | Default | Meaning |
@@ -91,9 +118,11 @@ The raw signals are saved to `outputs/audience_signals.json`.
 | `--no-audience-signals` | off | Ignore heatmap/chapters/comments |
 | `--no-event-markers` | off | Skip FFmpeg event detection |
 | `--no-scene-detect` | off | Keep volume spikes, skip the scene-cut pass |
+| `--visual-rerank` | off | Gemini judges sampled frames of each candidate |
+| `--visual-frames N` | 6 | Frames per candidate (1-12) |
 | `--use-comments` | off | Fetch top comments for timestamps |
 | `--max-comments N` | 300 | Comment limit |
-| `--score-weights` | `ai=0.5,heatmap=0.3,comments=0.2,audio=0.1` | Combined-score weights |
+| `--score-weights` | `ai=0.5,heatmap=0.3,comments=0.2,audio=0.1,visual=0.3` | Combined-score weights |
 | `--ai-temperature` | 0.3 | Gemini sampling temperature |
 
 Comment fetching is optional because it adds a request to YouTube and can hit

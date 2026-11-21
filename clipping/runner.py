@@ -13,6 +13,19 @@ from . import diarization as diarization_mod
 from . import engine, metadata, scoring, studio, hook_manager, voiceover
 
 
+def _visual_review_enabled(cfg) -> bool:
+    """--visual-rerank needs Gemini (vision) and a fresh analysis (not cached JSON)."""
+    if not getattr(cfg, "visual_rerank", False):
+        return False
+    if getattr(cfg, "load_gemini_json", False):
+        print("ℹ️ Visual review dilewati: memakai hasil AI cache (--load-gemini-json).")
+        return False
+    if getattr(cfg, "ai_provider", "gemini") != "gemini":
+        print("ℹ️ Visual review hanya tersedia untuk Gemini; dilewati.")
+        return False
+    return True
+
+
 def _collect_signals(cfg, video_info, source_platform):
     """Audience signals (YouTube) + FFmpeg events (any source), saved to outputs."""
     signals = _collect_audience_signals(cfg, video_info, source_platform)
@@ -132,7 +145,8 @@ def run_pipeline(cfg, whisper_model_instance=None) -> list[dict]:
     # Step 2b — Audience signals (YouTube heatmap / chapters / comments)
     signals = _collect_signals(cfg, video_info, source_platform)
     transkrip_ai = scoring.annotate_transcript(transkrip_lengkap, signals)
-    pool = scoring.candidate_pool(cfg.jumlah_clip, signals)
+    visual_on = _visual_review_enabled(cfg)
+    pool = scoring.candidate_pool(cfg.jumlah_clip, signals, force=visual_on)
     if pool != cfg.jumlah_clip:
         print(f"📊 Meminta {pool} kandidat klip ke AI, lalu memilih {cfg.jumlah_clip} terbaik dengan skor gabungan.")
 
@@ -169,7 +183,21 @@ def run_pipeline(cfg, whisper_model_instance=None) -> list[dict]:
     # Step 3b — Score breakdown + combined score with audience signals
     if isinstance(hasil_json, list):
         hasil_json = scoring.apply_score_breakdown(hasil_json)
-    if isinstance(hasil_json, list) and scoring.has_signals(signals):
+    if isinstance(hasil_json, list) and visual_on and hasil_json:
+        from . import visual
+
+        try:
+            n = visual.score_candidates(
+                hasil_json, cfg.file_video_asli, transkrip_lengkap, cfg, engine._generate_json_with_retry
+            )
+            print(f"   👁️ {n}/{len(hasil_json)} kandidat mendapat visual score.")
+        except Exception as exc:  # visual review is a bonus; never fail the run
+            print(f"   ⚠️ Visual review gagal ({exc}). Lanjut dengan ranking biasa.")
+    if isinstance(hasil_json, list) and (
+        scoring.has_signals(signals)
+        or any("visual_score" in c for c in hasil_json)
+        or len(hasil_json) > cfg.jumlah_clip
+    ):
         hasil_json = scoring.rerank(
             hasil_json, signals, keep=cfg.jumlah_clip,
             weights=getattr(cfg, "score_weights", None),

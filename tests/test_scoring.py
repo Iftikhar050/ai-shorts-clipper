@@ -162,7 +162,7 @@ def test_events_add_markers_and_audio_component():
 def test_weights_and_candidate_pool():
     assert scoring.parse_weights("") == scoring.DEFAULT_WEIGHTS
     assert scoring.parse_weights("heatmap=0.6, comments=0") == {
-        "ai": 0.5, "heatmap": 0.6, "comments": 0.0, "audio": 0.1}
+        "ai": 0.5, "heatmap": 0.6, "comments": 0.0, "audio": 0.1, "visual": 0.3}
     for bad in ("video=1", "ai=x", "heatmap=-1", "ai=0"):
         with pytest.raises(ValueError):
             scoring.parse_weights(bad)
