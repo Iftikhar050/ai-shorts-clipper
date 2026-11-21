@@ -23,11 +23,14 @@ import json
 import math
 import re
 
+from clipping import events as events_mod
+
 BREAKDOWN_KEYS = ("hook", "emotion", "shareability", "clarity", "payoff")
-DEFAULT_WEIGHTS = {"ai": 0.5, "heatmap": 0.3, "comments": 0.2}
+DEFAULT_WEIGHTS = {"ai": 0.5, "heatmap": 0.3, "comments": 0.2, "audio": 0.1}
 HEATMAP_MARK_THRESHOLD = 0.5   # mark transcript lines replayed at >= 50% of the peak
 COMMENT_WINDOW_PAD = 3.0       # seconds of slack around a commented timestamp
 MAX_OVERLAP = 0.5              # re-ranking skips candidates sharing >50% with a better clip
+MIN_COMMENT_MARKS = 5          # fewer comment timestamps than this is too thin to rank with
 
 _LINE_RE = re.compile(r"^\[(\d+(?:\.\d+)?) - (\d+(?:\.\d+)?)\]")
 _TS_RE = re.compile(r"(?<![\d:])(?:(\d{1,2}):)?(\d{1,2}):([0-5]\d)(?![\d:])")
@@ -122,8 +125,14 @@ def fetch_comments(url: str, max_comments: int = 300, cookies=None) -> list[dict
             for c in (info or {}).get("comments") or []]
 
 
+def _comments_usable(signals: dict | None) -> bool:
+    return bool(signals) and len(signals.get("comment_marks") or []) >= MIN_COMMENT_MARKS
+
+
 def has_signals(signals: dict | None) -> bool:
-    return bool(signals and (signals.get("heatmap") or signals.get("comment_marks")))
+    """True when the signals are strong enough to re-rank clips."""
+    return bool(signals and (signals.get("heatmap") or _comments_usable(signals)
+                             or (signals.get("events") or {}).get("spikes")))
 
 
 def save_signals(signals: dict, path: str) -> None:
@@ -159,8 +168,10 @@ def comment_count_in_window(signals: dict, start: float, end: float) -> int:
 # ---------------------------------------------------------------------------
 
 def annotate_transcript(transcript: str, signals: dict | None) -> str:
-    """Append [AUDIENCE ...] markers and insert [CHAPTER ...] lines."""
-    if not signals or not (has_signals(signals) or signals.get("chapters")):
+    """Append [AUDIENCE ...] / [EVENT ...] markers and insert [CHAPTER ...] lines."""
+    ev = (signals or {}).get("events")
+    if not signals or not (signals.get("heatmap") or signals.get("comment_marks")
+                           or signals.get("chapters") or events_mod.has_events(ev)):
         return transcript
     chapters = sorted(signals.get("chapters") or [], key=lambda c: c["start"])
     ci = 0
@@ -181,7 +192,9 @@ def annotate_transcript(transcript: str, signals: dict | None) -> str:
         n = comment_count_in_window(signals, start, end)
         if n:
             tags.append(f"{n} viewer comment{'s' if n != 1 else ''} point here")
-        out.append(line + (f" [AUDIENCE: {', '.join(tags)}]" if tags else ""))
+        event_tags = events_mod.tags_for_window(ev, start, end) if ev else []
+        out.append(line + (f" [AUDIENCE: {', '.join(tags)}]" if tags else "")
+                   + (f" [EVENT: {', '.join(event_tags)}]" if event_tags else ""))
     result = "\n".join(out)
     return result + ("\n" if transcript.endswith("\n") else "")
 
@@ -217,26 +230,42 @@ def rerank(clips: list[dict], signals: dict | None, keep: int, weights: dict | N
     viral_score becomes the combined score (0-100); the AI's own score is kept
     in ai_viral_score and every component in score_components.
     """
-    weights = weights or DEFAULT_WEIGHTS
+    weights = {**DEFAULT_WEIGHTS, **(weights or {})}
     have_heatmap = bool(signals and signals.get("heatmap"))
-    have_comments = bool(signals and signals.get("comment_marks"))
+    have_comments = _comments_usable(signals)
+    ev = (signals or {}).get("events")
+    have_audio = bool(ev and ev.get("spikes"))
 
+    measured = []
     for clip in clips:
         start, end = float(clip.get("start_time", 0)), float(clip.get("end_time", 0))
-        ai = max(0.0, min(1.0, float(clip.get("viral_score", 0) or 0) / 100))
+        ai = max(0.0, min(1.0, float(clip.get("ai_viral_score", clip.get("viral_score", 0)) or 0) / 100))
         comps = {"ai": round(ai, 4)}
         if have_heatmap:
             comps["heatmap"] = round(heatmap_in_window(signals, start, end) or 0.0, 4)
         if have_comments:
             # saturating: 1 mention ~0.28, 3 ~0.63, 6+ ~0.86
             comps["comments"] = round(1 - math.exp(-comment_weight_in_window(signals, start, end) / 3), 4)
-        total_w = sum(weights[k] for k in comps)
-        final = sum(weights[k] * v for k, v in comps.items()) / total_w if total_w else ai
+        if have_audio:
+            comps["audio"] = events_mod.audio_score(ev, start, end)
+        measured.append(comps)
+
+    # A signal that is 0 for every candidate can't tell them apart; counting it
+    # would only drag every score down, so it is dropped.
+    informative = {"ai"} | {k for k in ("heatmap", "comments", "audio")
+                            if any(c.get(k, 0) > 0 for c in measured) and weights.get(k, 0) > 0}
+
+    for clip, comps in zip(clips, measured):
+        start, end = float(clip.get("start_time", 0)), float(clip.get("end_time", 0))
+        used = {k: v for k, v in comps.items() if k in informative}
+        total_w = sum(weights[k] for k in used)
+        final = sum(weights[k] * v for k, v in used.items()) / total_w
         clip.setdefault("ai_viral_score", clip.get("viral_score", 0))
-        clip["score_components"] = comps
+        clip["score_components"] = used
         clip["audience_signals"] = {
             "heatmap_peak": comps.get("heatmap"),
             "comment_mentions": comment_count_in_window(signals, start, end) if have_comments else None,
+            "event_tags": events_mod.tags_for_window(ev, start, end) if ev else [],
         }
         clip["viral_score"] = int(round(final * 100))
 

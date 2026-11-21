@@ -509,6 +509,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Do not use YouTube 'Most replayed' heatmap / chapters to guide and re-rank clips.",
     )
     p.add_argument(
+        "--no-event-markers",
+        action="store_true",
+        help="Skip FFmpeg event detection (volume spikes, scene-cut bursts) used to guide and re-rank clips.",
+    )
+    p.add_argument(
+        "--no-scene-detect",
+        action="store_true",
+        help="Keep volume-spike detection but skip scene-cut detection (saves a video decode pass).",
+    )
+    p.add_argument(
         "--use-comments",
         action="store_true",
         help="Also fetch top YouTube comments and use timestamps viewers mention (one extra request).",
@@ -522,7 +532,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--score-weights",
         default="",
-        help="Combined-score weights, e.g. 'ai=0.5,heatmap=0.3,comments=0.2' (default). "
+        help="Combined-score weights, e.g. 'ai=0.5,heatmap=0.3,comments=0.2,audio=0.1' (default). "
              "Only signals available for the video are used.",
     )
     p.add_argument(
@@ -975,6 +985,8 @@ def build_config(argv: list[str] | None = None) -> SimpleNamespace:
         account_classify=not args.no_account_classify,
         # Scoring & audience signals
         audience_signals=not args.no_audience_signals,
+        event_markers=not args.no_event_markers,
+        scene_detect=not args.no_scene_detect,
         use_comments=args.use_comments,
         max_comments=args.max_comments,
         score_weights=score_weights,

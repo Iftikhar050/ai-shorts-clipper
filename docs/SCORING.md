@@ -37,15 +37,40 @@ Signals are used in two ways:
    [CHAPTER at 60.0s] The big moment
    [62.0 - 68.0] the big moment [AUDIENCE: replayed 100%, 2 viewer comments point here]
    ```
-2. **Combined score.** When a heatmap or comment timestamps exist, the AI is
-   asked for extra candidates (2x, at most +5), then each is scored:
+2. **Combined score.** When usable signals exist, the AI is asked for extra
+   candidates (2x, at most +5), then each is scored:
 
    ```
-   final = (0.5 × AI + 0.3 × heatmap peak + 0.2 × comments) / (sum of weights used)
+   final = (0.5 × AI + 0.3 × heatmap + 0.2 × comments + 0.1 × audio) / (sum of weights used)
    ```
 
-   Only signals available for that video count. Candidates overlapping more
-   than 50% with a better clip are skipped. The top `--clips` are rendered.
+   A signal only counts when it can tell candidates apart:
+   - comments need at least 5 timestamps (1-2 stray timestamps are ignored)
+   - a signal that is 0 for every candidate is dropped, so it can't drag all
+     scores down
+
+   Candidates overlapping more than 50% with a better clip are skipped. The
+   top `--clips` are rendered.
+
+## 3. Video events (FFmpeg, every source)
+
+Detected from the video file itself, on CPU, with no AI cost:
+
+| Event | How | Typical cost (11-min 1080p) |
+|---|---|---|
+| Scene-cut bursts | ≥3 hard cuts within 6 s on a 4 fps, 256 px copy (replays, montages) | ~10-40 s |
+| Volume spikes | A second ≥6 dB above its surrounding 30 s | ~2 s |
+
+They appear as `[EVENT: 3 rapid scene cuts]` / `[EVENT: volume spike +9 dB]`
+markers and as the `audio` score component.
+
+What to expect, measured on real uploads: most YouTube audio is
+loudness-compressed (about 2-3 dB of range), so volume spikes rarely fire on
+it. That is deliberate, since a lower threshold mostly marks noise. Spikes
+help on less-processed audio (live streams, gameplay, raw podcasts). Scene-cut
+bursts do work on edited content: on a cricket highlights video the detected
+burst fell inside the AI's #1 pick (the century replay). A talking-head video
+correctly produced no events.
 
 Every clip keeps the details in `metadata_preview.json`:
 
@@ -64,9 +89,11 @@ The raw signals are saved to `outputs/audience_signals.json`.
 | Flag | Default | Meaning |
 |---|---|---|
 | `--no-audience-signals` | off | Ignore heatmap/chapters/comments |
+| `--no-event-markers` | off | Skip FFmpeg event detection |
+| `--no-scene-detect` | off | Keep volume spikes, skip the scene-cut pass |
 | `--use-comments` | off | Fetch top comments for timestamps |
 | `--max-comments N` | 300 | Comment limit |
-| `--score-weights` | `ai=0.5,heatmap=0.3,comments=0.2` | Combined-score weights |
+| `--score-weights` | `ai=0.5,heatmap=0.3,comments=0.2,audio=0.1` | Combined-score weights |
 | `--ai-temperature` | 0.3 | Gemini sampling temperature |
 
 Comment fetching is optional because it adds a request to YouTube and can hit

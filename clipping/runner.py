@@ -13,6 +13,24 @@ from . import diarization as diarization_mod
 from . import engine, metadata, scoring, studio, hook_manager, voiceover
 
 
+def _collect_signals(cfg, video_info, source_platform):
+    """Audience signals (YouTube) + FFmpeg events (any source), saved to outputs."""
+    signals = _collect_audience_signals(cfg, video_info, source_platform)
+    if getattr(cfg, "event_markers", False) and os.path.exists(cfg.file_video_asli):
+        from . import events as events_mod
+
+        scenes = getattr(cfg, "scene_detect", True)
+        print(f"🎚️ Mendeteksi event audio{' & scene cut' if scenes else ''} dengan FFmpeg...")
+        ev = events_mod.collect_events(cfg.file_video_asli, scenes=scenes)
+        signals = signals or scoring.collect_signals(None)
+        signals["events"] = ev
+        print(f"   {len(ev['spikes'])} volume spike, {len(ev['cut_bursts'])} burst scene cut"
+              + (f" | ⚠️ {'; '.join(ev['errors'])}" if ev["errors"] else ""))
+    if signals is not None:
+        scoring.save_signals(signals, os.path.join(cfg.outputs_dir, "audience_signals.json"))
+    return signals
+
+
 def _collect_audience_signals(cfg, video_info, source_platform):
     """Heatmap/chapters from the download's video info, plus optional comments."""
     if source_platform != "youtube" or not getattr(cfg, "audience_signals", True):
@@ -27,7 +45,6 @@ def _collect_audience_signals(cfg, video_info, source_platform):
         except Exception as exc:  # comments are a bonus signal; never fail the run
             print(f"   ⚠️ Komentar tidak bisa diambil ({exc}). Lanjut tanpa komentar.")
     signals = scoring.collect_signals(video_info, comments)
-    scoring.save_signals(signals, os.path.join(cfg.outputs_dir, "audience_signals.json"))
     print(
         f"📊 Sinyal audiens: heatmap {'ADA' if signals['heatmap'] else 'tidak ada'}, "
         f"{len(signals['chapters'])} chapter, {len(signals['comment_marks'])} timestamp dari "
@@ -113,7 +130,7 @@ def run_pipeline(cfg, whisper_model_instance=None) -> list[dict]:
         )
 
     # Step 2b — Audience signals (YouTube heatmap / chapters / comments)
-    signals = _collect_audience_signals(cfg, video_info, source_platform)
+    signals = _collect_signals(cfg, video_info, source_platform)
     transkrip_ai = scoring.annotate_transcript(transkrip_lengkap, signals)
     pool = scoring.candidate_pool(cfg.jumlah_clip, signals)
     if pool != cfg.jumlah_clip:

@@ -25,7 +25,8 @@ INFO = {
                  {"start_time": 60, "end_time": 120, "title": "The big moment"}],
 }
 COMMENTS = [{"text": "1:05 😂😂", "like_count": 99}, {"text": "wait 1:10 and 0:05!", "like_count": 0},
-            {"text": "no timestamp here", "like_count": 500}, {"text": "9:59 out of range", "like_count": 3}]
+            {"text": "no timestamp here", "like_count": 500}, {"text": "9:59 out of range", "like_count": 3},
+            {"text": "1:08 best part", "like_count": 0}, {"text": "1:12!!", "like_count": 0}]
 
 
 @pytest.fixture
@@ -62,8 +63,9 @@ def test_collect_signals_normalizes_heatmap_and_weights_comments():
     s = scoring.collect_signals(INFO, COMMENTS)
     assert [b["value"] for b in s["heatmap"]] == [0.25, 0.5, 1.0, 0.125]
     assert [c["title"] for c in s["chapters"]] == ["Intro", "The big moment"]
-    assert [(m["time"], m["weight"]) for m in s["comment_marks"]] == [(65.0, 3.0), (70.0, 1.0), (5.0, 1.0)]
-    assert s["comments_fetched"] == 4 and scoring.has_signals(s)
+    assert [(m["time"], m["weight"]) for m in s["comment_marks"]] == [
+        (65.0, 3.0), (70.0, 1.0), (5.0, 1.0), (68.0, 1.0), (72.0, 1.0)]
+    assert s["comments_fetched"] == 6 and scoring.has_signals(s)
     empty = scoring.collect_signals({"heatmap": None}, None)
     assert not scoring.has_signals(empty) and empty["heatmap"] == []
 
@@ -76,7 +78,7 @@ def test_annotate_transcript_adds_markers_and_chapters():
         "[CHAPTER at 0.0s] Intro",
         "[2.0 - 8.0] hello there [AUDIENCE: 1 viewer comment point here]",
         "[CHAPTER at 60.0s] The big moment",
-        "[62.0 - 68.0] the big moment [AUDIENCE: replayed 100%, 2 viewer comments point here]",
+        "[62.0 - 68.0] the big moment [AUDIENCE: replayed 100%, 3 viewer comments point here]",
         "[95.0 - 99.0] quiet bit",
     ]
     assert out.endswith("\n")
@@ -98,7 +100,7 @@ def test_rerank_lets_audience_data_overtake_the_ai_and_explains_why():
     assert best["ai_viral_score"] == 75
     assert set(best["score_components"]) == {"ai", "heatmap", "comments"}
     assert best["score_components"]["heatmap"] == 1.0
-    assert best["audience_signals"] == {"heatmap_peak": 1.0, "comment_mentions": 2}
+    assert best["audience_signals"] == {"heatmap_peak": 1.0, "comment_mentions": 4, "event_tags": []}
     assert best["viral_score"] > top[1]["viral_score"]
 
 
@@ -124,10 +126,44 @@ def test_rerank_uses_only_available_signals():
     assert clip["audience_signals"]["comment_mentions"] is None
 
 
+def test_sparse_or_uninformative_signals_do_not_drag_scores_down():
+    # 1 comment timestamp (real-world case): too thin -> ignored entirely
+    thin = scoring.collect_signals({"duration": 600}, [{"text": "10:46", "like_count": 0}])
+    assert not scoring.has_signals(thin)
+    clips = [{"viral_score": 94, "start_time": 27, "end_time": 54}]
+    assert scoring.rerank([dict(c) for c in clips], thin, keep=1)[0]["viral_score"] == 94
+    # heatmap exists but no candidate overlaps a replayed bin -> heatmap dropped, AI score kept
+    cold = {"heatmap": [{"start": 500, "end": 510, "value": 1.0}], "comment_marks": [], "events": None}
+    top = scoring.rerank([dict(c) for c in clips], cold, keep=1)[0]
+    assert top["viral_score"] == 94 and top["score_components"] == {"ai": 0.94}
+
+
+def test_events_add_markers_and_audio_component():
+    ev = {"spikes": [{"start": 62.0, "end": 64.0, "delta_db": 15.0}],
+          "cut_bursts": [{"start": 2.0, "end": 7.0, "cuts": 4}]}
+    s = scoring.collect_signals(None)
+    s["events"] = ev
+    assert scoring.has_signals(s)
+    text = "[2.0 - 8.0] hello there\n[62.0 - 68.0] the big moment\n"
+    assert scoring.annotate_transcript(text, s).splitlines() == [
+        "[2.0 - 8.0] hello there [EVENT: 4 rapid scene cuts]",
+        "[62.0 - 68.0] the big moment [EVENT: volume spike +15 dB]",
+    ]
+    clips = [{"viral_score": 85, "start_time": 0, "end_time": 30},
+             {"viral_score": 80, "start_time": 60, "end_time": 90}]
+    top = scoring.rerank(clips, s, keep=2)
+    loud = next(c for c in top if c["start_time"] == 60)
+    assert loud["score_components"] == {"ai": 0.8, "audio": 0.75}
+    assert loud["audience_signals"]["event_tags"] == ["volume spike +15 dB"]
+    # (0.5*0.80 + 0.1*0.75) / 0.6 = 0.7917 vs (0.5*0.85 + 0) / 0.6 = 0.7083
+    assert [c["start_time"] for c in top] == [60, 0]
+
+
 def test_weights_and_candidate_pool():
     assert scoring.parse_weights("") == scoring.DEFAULT_WEIGHTS
-    assert scoring.parse_weights("heatmap=0.6, comments=0") == {"ai": 0.5, "heatmap": 0.6, "comments": 0.0}
-    for bad in ("audio=1", "ai=x", "heatmap=-1", "ai=0"):
+    assert scoring.parse_weights("heatmap=0.6, comments=0") == {
+        "ai": 0.5, "heatmap": 0.6, "comments": 0.0, "audio": 0.1}
+    for bad in ("video=1", "ai=x", "heatmap=-1", "ai=0"):
         with pytest.raises(ValueError):
             scoring.parse_weights(bad)
     s = scoring.collect_signals(INFO, None)
@@ -149,7 +185,7 @@ def test_schema_breakdown_is_optional_and_ordered():
     assert gem["properties"]["score_breakdown"]["type"] == "OBJECT"
 
 
-@pytest.mark.parametrize("lang, header", [("en", "AUDIENCE SIGNALS (REAL VIEWER DATA)"),
+@pytest.mark.parametrize("lang, header", [("en", "AUDIENCE & EVENT SIGNALS"),
                                           ("id", "SINYAL AUDIENS (DATA PENONTON ASLI)")])
 def test_signals_prompt_section_only_with_markers(engine, lang, header):
     plain = engine.get_analysis_prompt("[0.0 - 5.0] hi", 2, 3, prompt_language=lang)
@@ -165,20 +201,31 @@ def test_english_prompt_asks_for_breakdown(engine):
 
 
 def test_runner_collects_signals_and_survives_comment_failure(monkeypatch, tmp_path):
-    from clipping import runner
+    from clipping import events, runner
 
     def boom(*a, **k):
         raise RuntimeError("HTTP Error 429")
 
+    video = tmp_path / "video_asli.mp4"
+    video.write_bytes(b"x")
+    calls = []
     monkeypatch.setattr(scoring, "fetch_comments", boom)
-    cfg = SimpleNamespace(audience_signals=True, use_comments=True, max_comments=50,
-                          url_youtube="u", outputs_dir=str(tmp_path))
-    s = runner._collect_audience_signals(cfg, INFO, "youtube")
-    assert len(s["heatmap"]) == 4 and s["comment_marks"] == []
-    assert json.loads((tmp_path / "audience_signals.json").read_text(encoding="utf-8"))["chapters"]
-    assert runner._collect_audience_signals(cfg, INFO, "tiktok") is None
-    cfg.audience_signals = False
-    assert runner._collect_audience_signals(cfg, INFO, "youtube") is None
+    monkeypatch.setattr(events, "collect_events", lambda path, scenes=True: calls.append(scenes) or {
+        "baseline_db": -30, "spikes": [{"start": 1, "end": 2, "delta_db": 9}], "cuts": [],
+        "cut_bursts": [], "errors": []})
+    cfg = SimpleNamespace(audience_signals=True, use_comments=True, max_comments=50, url_youtube="u",
+                          outputs_dir=str(tmp_path), file_video_asli=str(video),
+                          event_markers=True, scene_detect=False)
+    s = runner._collect_signals(cfg, INFO, "youtube")
+    assert len(s["heatmap"]) == 4 and s["comment_marks"] == [] and s["events"]["spikes"]
+    assert calls == [False]
+    saved = json.loads((tmp_path / "audience_signals.json").read_text(encoding="utf-8"))
+    assert saved["chapters"] and saved["events"]["spikes"]
+    # non-YouTube: no audience data, but events still run
+    s = runner._collect_signals(cfg, INFO, "tiktok")
+    assert s["heatmap"] == [] and s["events"]["spikes"]
+    cfg.audience_signals = cfg.event_markers = False
+    assert runner._collect_signals(cfg, INFO, "youtube") is None
 
 
 def test_cli_scoring_flags(tmp_path, monkeypatch):
@@ -187,11 +234,14 @@ def test_cli_scoring_flags(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     cfg = build_config(["--url", "https://youtube.com/watch?v=x"])
     assert cfg.audience_signals and not cfg.use_comments and cfg.ai_temperature == 0.3
+    assert cfg.event_markers and cfg.scene_detect
+    cfg = build_config(["--url", "https://youtube.com/watch?v=x", "--no-event-markers", "--no-scene-detect"])
+    assert not cfg.event_markers and not cfg.scene_detect
     assert cfg.score_weights == scoring.DEFAULT_WEIGHTS
     cfg = build_config(["--url", "https://youtube.com/watch?v=x", "--no-audience-signals", "--use-comments",
                         "--max-comments", "50", "--score-weights", "heatmap=0.5", "--ai-temperature", "0"])
     assert (cfg.audience_signals, cfg.use_comments, cfg.max_comments, cfg.ai_temperature) == (False, True, 50, 0.0)
     assert cfg.score_weights["heatmap"] == 0.5
-    for bad in (["--score-weights", "audio=1"], ["--max-comments", "0"], ["--ai-temperature", "3"]):
+    for bad in (["--score-weights", "video=1"], ["--max-comments", "0"], ["--ai-temperature", "3"]):
         with pytest.raises(SystemExit):
             build_config(["--url", "https://youtube.com/watch?v=x", *bad])

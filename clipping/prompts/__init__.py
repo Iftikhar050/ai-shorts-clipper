@@ -67,6 +67,7 @@ SEGMENT-BASED TRIMMING (KEEP SEGMENTS — WAJIB):
 SINYAL AUDIENS (DATA PENONTON ASLI):
 - Beberapa baris transkrip diakhiri penanda [AUDIENCE: ...] dari data penonton YouTube: "replayed N%" = seberapa sering penonton mengulang momen itu (100% = bagian paling sering diulang); "N viewer comments point here" = komentar yang menyebut timestamp tersebut.
 - Baris yang diawali [CHAPTER at ...] adalah chapter dari uploader; titik awal/akhir yang natural.
+- Penanda [EVENT: ...] dideteksi dari video itu sendiri: "volume spike +N dB" = suara jauh lebih keras dari biasanya (sorakan, tawa, teriakan); "N rapid scene cuts" = banyak pergantian shot dalam beberapa detik (replay, montase). Ini momen yang kuat secara visual/emosional walaupun ucapannya singkat.
 - Anggap momen yang sering diulang atau disebut di komentar sebagai minat penonton yang terbukti: utamakan momen ini selama klip tetap mengikuti semua aturan di atas.
 - Penanda BUKAN ucapan: jangan pernah dipakai sebagai hook, kata typography, judul, atau caption.
 """,
@@ -109,9 +110,10 @@ SEGMENT-BASED TRIMMING (KEEP SEGMENTS — REQUIRED):
         "account_rules_header": "\n\nCLASSIFICATION TIE-BREAK RULES:\n",
         "signals": """
 
-AUDIENCE SIGNALS (REAL VIEWER DATA):
+AUDIENCE & EVENT SIGNALS (REAL VIEWER DATA + VIDEO ANALYSIS):
 - Some transcript lines end with [AUDIENCE: ...] markers from YouTube's real viewer data: "replayed N%" = how often viewers rewatched that moment (100% = the most replayed part of the video); "N viewer comments point here" = comments that link to that timestamp.
 - Lines starting with [CHAPTER at ...] are the uploader's chapters; they are natural start/end points.
+- [EVENT: ...] markers are detected from the video itself: "volume spike +N dB" = much louder than usual (cheering, laughter, shouting); "N rapid scene cuts" = many shot changes within a few seconds (replay, montage). These moments are visually or emotionally strong even when the speech is short.
 - Treat strongly replayed or comment-linked moments as proven audience interest: prefer them when choosing clips, as long as the clip still follows every rule above.
 - Markers are NOT speech: never use them as hook text, typography words, titles or captions.
 """,

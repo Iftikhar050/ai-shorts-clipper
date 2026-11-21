@@ -660,7 +660,7 @@ def get_analysis_prompt(transkrip_lengkap: str, jumlah_clip: int, durasi_hook: i
         segment_section = prompts.section(lang, "segment", silence_hint=silence_hint)
 
     # Audience-signal markers are added by clipping.scoring.annotate_transcript
-    has_markers = "[AUDIENCE:" in transkrip_lengkap or "[CHAPTER at " in transkrip_lengkap
+    has_markers = any(m in transkrip_lengkap for m in ("[AUDIENCE:", "[CHAPTER at ", "[EVENT:"))
     signals_section = prompts.section(lang, "signals") if has_markers else ""
 
     return prompts.render_analysis_prompt(
