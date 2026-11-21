@@ -10,7 +10,7 @@ Templates use ``$name`` / ``${name}`` placeholders (Python ``string.Template``),
 so JSON braces in the files need no escaping. Placeholders:
 
     clip_count, min_duration, max_duration, hook_duration, transcript,
-    account_section, hook_v2_section, segment_section,
+    account_section, hook_v2_section, segment_section, signals_section,
     example_account, example_handle, alt_account, alt_handle,
     output_language (English template only)
 """
@@ -62,6 +62,14 @@ SEGMENT-BASED TRIMMING (KEEP SEGMENTS — WAJIB):
             "tipe_akun HARUS salah satu dari nama akun di bawah ini, dan akun_tujuan HARUS handle akun tersebut:\n"
         ),
         "account_rules_header": "\n\nATURAN KHUSUS KLASIFIKASI:\n",
+        "signals": """
+
+SINYAL AUDIENS (DATA PENONTON ASLI):
+- Beberapa baris transkrip diakhiri penanda [AUDIENCE: ...] dari data penonton YouTube: "replayed N%" = seberapa sering penonton mengulang momen itu (100% = bagian paling sering diulang); "N viewer comments point here" = komentar yang menyebut timestamp tersebut.
+- Baris yang diawali [CHAPTER at ...] adalah chapter dari uploader; titik awal/akhir yang natural.
+- Anggap momen yang sering diulang atau disebut di komentar sebagai minat penonton yang terbukti: utamakan momen ini selama klip tetap mengikuti semua aturan di atas.
+- Penanda BUKAN ucapan: jangan pernah dipakai sebagai hook, kata typography, judul, atau caption.
+""",
     },
     "en": {
         "hook_v2": """
@@ -99,6 +107,14 @@ SEGMENT-BASED TRIMMING (KEEP SEGMENTS — REQUIRED):
             "tipe_akun MUST be one of the account names below, and akun_tujuan MUST be that account's handle:\n"
         ),
         "account_rules_header": "\n\nCLASSIFICATION TIE-BREAK RULES:\n",
+        "signals": """
+
+AUDIENCE SIGNALS (REAL VIEWER DATA):
+- Some transcript lines end with [AUDIENCE: ...] markers from YouTube's real viewer data: "replayed N%" = how often viewers rewatched that moment (100% = the most replayed part of the video); "N viewer comments point here" = comments that link to that timestamp.
+- Lines starting with [CHAPTER at ...] are the uploader's chapters; they are natural start/end points.
+- Treat strongly replayed or comment-linked moments as proven audience interest: prefer them when choosing clips, as long as the clip still follows every rule above.
+- Markers are NOT speech: never use them as hook text, typography words, titles or captions.
+""",
     },
 }
 

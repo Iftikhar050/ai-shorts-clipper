@@ -5,11 +5,35 @@ Maps to Cell 4 (Execute) of the notebook.
 Orchestrates the full clip generation pipeline.
 """
 
+import copy
 import json
 import os
 
 from . import diarization as diarization_mod
-from . import engine, metadata, studio, hook_manager, voiceover
+from . import engine, metadata, scoring, studio, hook_manager, voiceover
+
+
+def _collect_audience_signals(cfg, video_info, source_platform):
+    """Heatmap/chapters from the download's video info, plus optional comments."""
+    if source_platform != "youtube" or not getattr(cfg, "audience_signals", True):
+        return None
+    comments = None
+    if getattr(cfg, "use_comments", False):
+        try:
+            print(f"💬 Mengambil hingga {cfg.max_comments} komentar teratas untuk timestamp penonton...")
+            comments = scoring.fetch_comments(
+                cfg.url_youtube, cfg.max_comments, cookies=getattr(cfg, "yt_cookies", None)
+            )
+        except Exception as exc:  # comments are a bonus signal; never fail the run
+            print(f"   ⚠️ Komentar tidak bisa diambil ({exc}). Lanjut tanpa komentar.")
+    signals = scoring.collect_signals(video_info, comments)
+    scoring.save_signals(signals, os.path.join(cfg.outputs_dir, "audience_signals.json"))
+    print(
+        f"📊 Sinyal audiens: heatmap {'ADA' if signals['heatmap'] else 'tidak ada'}, "
+        f"{len(signals['chapters'])} chapter, {len(signals['comment_marks'])} timestamp dari "
+        f"{signals['comments_fetched']} komentar."
+    )
+    return signals
 
 
 def run_pipeline(cfg, whisper_model_instance=None) -> list[dict]:
@@ -43,7 +67,7 @@ def run_pipeline(cfg, whisper_model_instance=None) -> list[dict]:
 
     # Step 1 — Download
     source_platform = getattr(cfg, "source_platform", "youtube")
-    engine.download_video(
+    video_info = engine.download_video(
         cfg.url_youtube,
         cfg.file_video_asli,
         getattr(cfg, "use_dlp_subs", False),
@@ -88,18 +112,29 @@ def run_pipeline(cfg, whisper_model_instance=None) -> list[dict]:
             whisper_model_instance=whisper_model_instance,
         )
 
+    # Step 2b — Audience signals (YouTube heatmap / chapters / comments)
+    signals = _collect_audience_signals(cfg, video_info, source_platform)
+    transkrip_ai = scoring.annotate_transcript(transkrip_lengkap, signals)
+    pool = scoring.candidate_pool(cfg.jumlah_clip, signals)
+    if pool != cfg.jumlah_clip:
+        print(f"📊 Meminta {pool} kandidat klip ke AI, lalu memilih {cfg.jumlah_clip} terbaik dengan skor gabungan.")
+
     # Step 3 — Gemini AI analysis
     gemini_output_path = os.path.join(cfg.outputs_dir, "gemini_response.json")
-    
+
     if getattr(cfg, "load_gemini_json", False) and os.path.exists(gemini_output_path):
         print(f"\n🔄 [3/3] Memuat data AI ({cfg.ai_provider}) dari file lokal: {gemini_output_path}")
         with open(gemini_output_path, "r", encoding="utf-8") as f:
             hasil_json = json.load(f)
         save_run_metadata(cfg, cached=True)
     else:
+        ai_cfg = copy.copy(cfg)
+        ai_cfg.jumlah_clip = pool
         try:
-            hasil_json = engine.analyze_with_ai(transkrip_lengkap, cfg)
+            hasil_json = engine.analyze_with_ai(transkrip_ai, ai_cfg)
+            cfg.ai_run_meta = getattr(ai_cfg, "ai_run_meta", None)
         except Exception:
+            cfg.ai_run_meta = getattr(ai_cfg, "ai_run_meta", None)
             if getattr(cfg, "ai_run_meta", None):
                 try:
                     save_run_metadata(cfg)
@@ -113,6 +148,18 @@ def run_pipeline(cfg, whisper_model_instance=None) -> list[dict]:
             json.dump(hasil_json, f, indent=4, ensure_ascii=False)
         print(f"💾 Raw AI response tersimpan di: {gemini_output_path}")
         save_run_metadata(cfg)
+
+    # Step 3b — Score breakdown + combined score with audience signals
+    if isinstance(hasil_json, list):
+        hasil_json = scoring.apply_score_breakdown(hasil_json)
+    if isinstance(hasil_json, list) and scoring.has_signals(signals):
+        hasil_json = scoring.rerank(
+            hasil_json, signals, keep=cfg.jumlah_clip,
+            weights=getattr(cfg, "score_weights", None),
+        )
+        for clip in hasil_json:
+            comps = ", ".join(f"{k}={v:.2f}" for k, v in clip["score_components"].items())
+            print(f"   #{clip['rank']} skor gabungan {clip['viral_score']} (AI {clip['ai_viral_score']}) | {comps}")
 
     # Step 4 — Metadata normalisation
     from clipping import prompts

@@ -61,6 +61,9 @@ def cfg():
         nvidia_model="test/nim-model",
         jumlah_clip=1,
         durasi_hook=5,
+        # The frozen snapshots are the upstream (Indonesian prompt) contract; the English
+        # prompt adds score_breakdown, covered in tests/test_scoring.py.
+        prompt_language="id",
     )
 
 

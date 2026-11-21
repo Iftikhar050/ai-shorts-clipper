@@ -504,6 +504,34 @@ def _build_parser() -> argparse.ArgumentParser:
              "(default: en,id).",
     )
     p.add_argument(
+        "--no-audience-signals",
+        action="store_true",
+        help="Do not use YouTube 'Most replayed' heatmap / chapters to guide and re-rank clips.",
+    )
+    p.add_argument(
+        "--use-comments",
+        action="store_true",
+        help="Also fetch top YouTube comments and use timestamps viewers mention (one extra request).",
+    )
+    p.add_argument(
+        "--max-comments",
+        type=int,
+        default=300,
+        help="Maximum comments to fetch with --use-comments (default: 300).",
+    )
+    p.add_argument(
+        "--score-weights",
+        default="",
+        help="Combined-score weights, e.g. 'ai=0.5,heatmap=0.3,comments=0.2' (default). "
+             "Only signals available for the video are used.",
+    )
+    p.add_argument(
+        "--ai-temperature",
+        type=float,
+        default=0.3,
+        help="Gemini sampling temperature for clip analysis; lower = more consistent picks (default: 0.3).",
+    )
+    p.add_argument(
         "--no-account-classify",
         action="store_true",
         help="Skip target-account classification (shorter prompt; every clip goes to 'General').",
@@ -828,6 +856,16 @@ def build_config(argv: list[str] | None = None) -> SimpleNamespace:
     except AccountsError as exc:
         parser.error(str(exc))
 
+    from clipping.scoring import parse_weights
+    try:
+        score_weights = parse_weights(args.score_weights)
+    except ValueError as exc:
+        parser.error(str(exc))
+    if args.max_comments < 1:
+        parser.error("--max-comments must be at least 1.")
+    if not (0.0 <= args.ai_temperature <= 2.0):
+        parser.error("--ai-temperature must be between 0 and 2.")
+
     outputs_dir = os.path.abspath(os.path.join(base_dir, "outputs"))
     os.makedirs(outputs_dir, exist_ok=True)
     font_dir = os.path.abspath(os.path.join(base_dir, "custom_fonts"))
@@ -935,6 +973,12 @@ def build_config(argv: list[str] | None = None) -> SimpleNamespace:
         account_rules=account_rules,
         accounts_source=accounts_source,
         account_classify=not args.no_account_classify,
+        # Scoring & audience signals
+        audience_signals=not args.no_audience_signals,
+        use_comments=args.use_comments,
+        max_comments=args.max_comments,
+        score_weights=score_weights,
+        ai_temperature=args.ai_temperature,
         # Prompt & metadata language
         prompt_language=args.prompt_language,
         output_language=args.output_language.strip() or "English",

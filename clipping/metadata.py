@@ -284,6 +284,12 @@ def print_preview(hasil_json: list[dict]) -> None:
     for item in hasil_json:
         klasifikasi = item.get("klasifikasi_akun", {})
         print(f"\n--- Rank {item['rank']} (Viral Score: {item.get('viral_score', '?')}) ---")
+        sb = item.get("score_breakdown")
+        if isinstance(sb, dict):
+            print("Score Breakdown   : " + ", ".join(f"{k} {v}/20" for k, v in sb.items()))
+        if isinstance(item.get("score_components"), dict):
+            comps = ", ".join(f"{k} {v:.2f}" for k, v in item["score_components"].items())
+            print(f"Combined Score    : {item['viral_score']} (AI {item.get('ai_viral_score', '?')}) <- {comps}")
         print(f"Akun Tujuan       : {klasifikasi.get('akun_tujuan', '')} ({klasifikasi.get('tipe_akun', '')})")
         print(f"Alasan Akun       : {klasifikasi.get('alasan', '')}")
         print(f"Title ID          : {item['title_indonesia']}")

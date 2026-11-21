@@ -11,8 +11,47 @@ _GEMINI_FIELDS = [
 ]
 
 
-def build_clips_schema(accounts: dict) -> dict:
-    """Return a fresh canonical JSON Schema (the original NVIDIA contract)."""
+_BREAKDOWN_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "hook": {"type": "integer"},
+        "emotion": {"type": "integer"},
+        "shareability": {"type": "integer"},
+        "clarity": {"type": "integer"},
+        "payoff": {"type": "integer"},
+    },
+    "required": ["hook", "emotion", "shareability", "clarity", "payoff"],
+}
+
+
+def _with_breakdown(schema: dict) -> dict:
+    """Insert a required score_breakdown object right after viral_score."""
+    import copy
+
+    item = schema["items"]
+    props = {}
+    for name, value in item["properties"].items():
+        props[name] = value
+        if name == "viral_score":
+            props["score_breakdown"] = copy.deepcopy(_BREAKDOWN_SCHEMA)
+    item["properties"] = props
+    required = list(item["required"])
+    required.insert(required.index("viral_score") + 1, "score_breakdown")
+    item["required"] = required
+    return schema
+
+
+def build_clips_schema(accounts: dict, score_breakdown: bool = False) -> dict:
+    """Return a fresh canonical JSON Schema (the original NVIDIA contract).
+
+    ``score_breakdown=True`` adds the five 1-20 component scores (English prompt).
+    """
+    schema = _build_base_schema(accounts)
+    return _with_breakdown(schema) if score_breakdown else schema
+
+
+def _build_base_schema(accounts: dict) -> dict:
     return {
         "type": "array",
         "items": {
@@ -174,10 +213,13 @@ def _to_gemini(value):
     }
 
 
-def build_gemini_schema(accounts: dict) -> dict:
+def build_gemini_schema(accounts: dict, score_breakdown: bool = False) -> dict:
     """Retain the pre-refactor Gemini types, constraints and field order."""
-    schema = _to_gemini(build_clips_schema(accounts))
+    schema = _to_gemini(build_clips_schema(accounts, score_breakdown=score_breakdown))
     item = schema["items"]
-    item["properties"] = {name: item["properties"][name] for name in _GEMINI_FIELDS}
-    item["required"] = list(_GEMINI_FIELDS)
+    fields = list(_GEMINI_FIELDS)
+    if score_breakdown:
+        fields.insert(fields.index("viral_score") + 1, "score_breakdown")
+    item["properties"] = {name: item["properties"][name] for name in fields}
+    item["required"] = fields
     return schema

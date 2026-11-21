@@ -27,6 +27,8 @@ class GeminiProvider:
         config = types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=schema,
+            # Lower = more consistent clip picks/scores between runs (None = model default)
+            temperature=getattr(cfg, "ai_temperature", None),
         )
         return self.generate_json(
             client=client,

@@ -167,7 +167,7 @@ def download_video(
     source_platform: str = "youtube",
     yt_cookies: str | bytes | None = None,
     sub_langs: list[str] | tuple[str, ...] = ("en", "id"),
-) -> None:
+) -> dict | None:
     """
     Download a video to *output_path* with configurable source height.
 
@@ -252,6 +252,7 @@ def download_video(
 
     # Jalankan download video terpisah dari urusan subtitle
     _apply_cookies(ydl_opts, yt_cookies)
+    info = None
     with YoutubeDL(ydl_opts) as ydl:
         # Extra step to verify resolution before downloading
         try:
@@ -270,6 +271,8 @@ def download_video(
             f"❌ Download dari {platform_label} gagal — file video tidak ditemukan di {output_path}.\n"
             "      Pastikan URL valid dan bisa diakses secara publik."
         )
+    # Video info (heatmap, chapters, duration...) for audience signals; None if unavailable.
+    return info if isinstance(info, dict) else None
 
 
 # ==============================================================================
@@ -626,6 +629,11 @@ def _generate_json_with_retry(client, model, fallback_model, contents, config):
 MIN_CLIP_DURATION = 20
 MAX_CLIP_DURATION = 179
 
+def _wants_breakdown(cfg) -> bool:
+    """The English prompt asks for the five component scores (score_breakdown)."""
+    return prompts.resolve_language(cfg) == "en"
+
+
 def get_analysis_prompt(transkrip_lengkap: str, jumlah_clip: int, durasi_hook: int, cfg=None,
                         prompt_language: str | None = None) -> str:
     """Centralized prompt for all providers, rendered from clipping/prompts/analysis.<lang>.md."""
@@ -651,6 +659,10 @@ def get_analysis_prompt(transkrip_lengkap: str, jumlah_clip: int, durasi_hook: i
         silence_hint = prompts.section(lang, "silence_hint") if getattr(cfg, "silence_trim", False) else ""
         segment_section = prompts.section(lang, "segment", silence_hint=silence_hint)
 
+    # Audience-signal markers are added by clipping.scoring.annotate_transcript
+    has_markers = "[AUDIENCE:" in transkrip_lengkap or "[CHAPTER at " in transkrip_lengkap
+    signals_section = prompts.section(lang, "signals") if has_markers else ""
+
     return prompts.render_analysis_prompt(
         lang,
         clip_count=jumlah_clip,
@@ -660,6 +672,7 @@ def get_analysis_prompt(transkrip_lengkap: str, jumlah_clip: int, durasi_hook: i
         account_section=_build_account_section(cfg, lang),
         hook_v2_section=hook_v2_section,
         segment_section=segment_section,
+        signals_section=signals_section,
         example_account=_ex_tipe,
         example_handle=_ex_akun,
         alt_account=_alt_tipe,
@@ -675,7 +688,9 @@ def analyze_with_nvidia(transkrip_lengkap: str, cfg) -> list[dict]:
     from clipping.providers.schema import build_clips_schema
 
     prompt = get_analysis_prompt(transkrip_lengkap, cfg.jumlah_clip, cfg.durasi_hook, cfg=cfg)
-    return NvidiaNimProvider.from_cfg(cfg).generate_clips(prompt, build_clips_schema(_accounts_for(cfg)))
+    return NvidiaNimProvider.from_cfg(cfg).generate_clips(
+        prompt, build_clips_schema(_accounts_for(cfg), score_breakdown=_wants_breakdown(cfg))
+    )
 
 
 def analyze_with_vllm(transkrip_lengkap: str, cfg) -> list[dict]:
@@ -687,7 +702,7 @@ def analyze_with_vllm(transkrip_lengkap: str, cfg) -> list[dict]:
     with VllmProvider.from_cfg(cfg) as provider:
         return provider.generate_clips(
             prompt,
-            build_clips_schema(_accounts_for(cfg)),
+            build_clips_schema(_accounts_for(cfg), score_breakdown=_wants_breakdown(cfg)),
             transcript=transkrip_lengkap,
             requested_clips=cfg.jumlah_clip,
             min_duration=MIN_CLIP_DURATION,
@@ -725,4 +740,6 @@ def analyze_with_gemini(transkrip_lengkap: str, cfg) -> list[dict]:
         generate_json=_generate_json_with_retry,
         timeout_ms=REQUEST_TIMEOUT_MS,
     )
-    return provider.generate_clips(prompt, build_gemini_schema(_accounts_for(cfg)))
+    return provider.generate_clips(
+        prompt, build_gemini_schema(_accounts_for(cfg), score_breakdown=_wants_breakdown(cfg))
+    )

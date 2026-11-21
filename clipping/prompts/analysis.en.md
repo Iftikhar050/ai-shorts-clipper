@@ -46,13 +46,14 @@ TIMING RULES:
 - If two strong moments are very close together and support each other, they may be merged as long as the duration stays ${min_duration}-${max_duration} seconds.
 - If two strong moments have different angles, keep them as separate clip candidates.
 
-INTERNAL VIRAL_SCORE ASSESSMENT:
-Score viral_score 1-100 from the components below. This is internal only; DO NOT add new fields to the JSON.
-- Hook strength: 1-20
-- Emotional intensity: 1-20
-- Shareability/comment potential: 1-20
-- Standalone clarity: 1-20
-- Payoff/retention: 1-20
+VIRAL_SCORE ASSESSMENT (REPORT THE BREAKDOWN):
+Score each component 1-20 and report them in "score_breakdown". viral_score MUST equal the sum of the five components.
+- Hook strength (score_breakdown.hook): 1-20
+- Emotional intensity (score_breakdown.emotion): 1-20
+- Shareability/comment potential (score_breakdown.shareability): 1-20
+- Standalone clarity (score_breakdown.clarity): 1-20
+- Payoff/retention (score_breakdown.payoff): 1-20
+- Be strict and consistent: 16-20 only for components that are clearly exceptional.
 
 Scoring guide:
 - Hook strength: how strongly the first 3 seconds make people stop scrolling.
@@ -207,13 +208,14 @@ OUTPUT RULES:
 - Do not give any explanation outside the JSON.
 - Every field is required.
 - When in doubt, prioritize accuracy to the clip over excessive creativity.
-${hook_v2_section}${segment_section}
+${hook_v2_section}${segment_section}${signals_section}
 
 REQUIRED JSON STRUCTURE (Follow these field names exactly):
 [
   {
     "rank": 1,
-    "viral_score": 95,
+    "viral_score": 86,
+    "score_breakdown": { "hook": 18, "emotion": 17, "shareability": 16, "clarity": 18, "payoff": 17 },
     "start_time": 30.5,
     "end_time": 90.0,
     "hook_start_time": 30.5,
