@@ -663,6 +663,13 @@ def get_analysis_prompt(transkrip_lengkap: str, jumlah_clip: int, durasi_hook: i
     has_markers = any(m in transkrip_lengkap for m in ("[AUDIENCE:", "[CHAPTER at ", "[EVENT:"))
     signals_section = prompts.section(lang, "signals") if has_markers else ""
 
+    # Your best real-world clips (run_performance.py examples), English prompt only
+    examples_section = ""
+    if lang == "en" and getattr(cfg, "use_examples", True):
+        from clipping import performance
+
+        examples_section = performance.load_examples_section()
+
     return prompts.render_analysis_prompt(
         lang,
         clip_count=jumlah_clip,
@@ -673,6 +680,7 @@ def get_analysis_prompt(transkrip_lengkap: str, jumlah_clip: int, durasi_hook: i
         hook_v2_section=hook_v2_section,
         segment_section=segment_section,
         signals_section=signals_section,
+        examples_section=examples_section,
         example_account=_ex_tipe,
         example_handle=_ex_akun,
         alt_account=_alt_tipe,

@@ -229,7 +229,7 @@ ATURAN OUTPUT:
 - Jangan beri penjelasan apa pun di luar JSON.
 - Semua field wajib terisi.
 - Jika ragu, prioritaskan akurasi isi klip daripada kreativitas berlebihan.
-${hook_v2_section}${segment_section}${signals_section}
+${hook_v2_section}${segment_section}${signals_section}${examples_section}
 
 STRUKTUR JSON WAJIB (Ikuti nama field ini secara kaku):
 [

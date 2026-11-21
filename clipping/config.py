@@ -519,6 +519,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Keep volume-spike detection but skip scene-cut detection (saves a video decode pass).",
     )
     p.add_argument(
+        "--no-examples",
+        action="store_true",
+        help="Do not show your top-performing past clips (run_performance.py examples) to the AI.",
+    )
+    p.add_argument(
         "--visual-rerank",
         action="store_true",
         help="Send a few frames of each candidate clip to Gemini so it can judge what it SEES, "
@@ -1001,6 +1006,7 @@ def build_config(argv: list[str] | None = None) -> SimpleNamespace:
         audience_signals=not args.no_audience_signals,
         event_markers=not args.no_event_markers,
         scene_detect=not args.no_scene_detect,
+        use_examples=not args.no_examples,
         visual_rerank=args.visual_rerank,
         visual_frames=args.visual_frames,
         use_comments=args.use_comments,

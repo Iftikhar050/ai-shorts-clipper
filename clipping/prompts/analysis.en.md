@@ -208,7 +208,7 @@ OUTPUT RULES:
 - Do not give any explanation outside the JSON.
 - Every field is required.
 - When in doubt, prioritize accuracy to the clip over excessive creativity.
-${hook_v2_section}${segment_section}${signals_section}
+${hook_v2_section}${segment_section}${signals_section}${examples_section}
 
 REQUIRED JSON STRUCTURE (Follow these field names exactly):
 [

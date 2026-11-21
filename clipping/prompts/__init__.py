@@ -10,7 +10,7 @@ Templates use ``$name`` / ``${name}`` placeholders (Python ``string.Template``),
 so JSON braces in the files need no escaping. Placeholders:
 
     clip_count, min_duration, max_duration, hook_duration, transcript,
-    account_section, hook_v2_section, segment_section, signals_section,
+    account_section, hook_v2_section, segment_section, signals_section, examples_section,
     example_account, example_handle, alt_account, alt_handle,
     output_language (English template only)
 """

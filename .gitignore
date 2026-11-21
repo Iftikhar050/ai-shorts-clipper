@@ -46,3 +46,7 @@ video_asli.*
 *.log
 /*.ttf
 *cookies*.txt
+
+# Performance tracking (personal data)
+performance.sqlite3
+clipping/prompts/top_examples.json
