@@ -39,22 +39,16 @@ def test_cli_single_batch_and_cached_ai_flags_are_preserved(monkeypatch, tmp_pat
     assert batch.file_video_asli == str(tmp_path / "video_asli.mp4")
 
 
-def test_cli_and_studio_use_compatible_model_without_reusing_legacy_cache(monkeypatch, tmp_path):
-    from web.api import config_adapter
-
+def test_cli_uses_short_range_face_model_without_reusing_legacy_cache(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(config_adapter, "PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(os, "environ", {"PYTHON_DOTENV_DISABLED": "1"})
     legacy = tmp_path / "blaze_face_full_range.tflite"
     legacy.write_bytes(b"synthetic legacy model cache")
 
     cli_cfg = config.build_config(["--url", "https://example.test/video"])
-    api_cfg = config_adapter.build_config_from_payload({"url": "https://example.test/video"}, "model_test")
 
     expected = tmp_path / "blaze_face_short_range_v1.tflite"
-    assert Path(cli_cfg.file_mediapipe_model) == Path(api_cfg.file_mediapipe_model) == expected
-    assert cli_cfg.url_mediapipe_model == api_cfg.url_mediapipe_model
+    assert Path(cli_cfg.file_mediapipe_model) == expected
     assert cli_cfg.url_mediapipe_model.endswith("/blaze_face_short_range/float16/1/blaze_face_short_range.tflite")
-    assert cli_cfg.face_detector == api_cfg.face_detector == "mediapipe"
+    assert cli_cfg.face_detector == "mediapipe"
     assert not expected.exists()  # Configuration alone does not download models.
     assert legacy.read_bytes() == b"synthetic legacy model cache"

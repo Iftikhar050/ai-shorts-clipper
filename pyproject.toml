@@ -1,16 +1,21 @@
 [project]
-name = "opensource-clipping"
-version = "1.12.0"
-description = "AI Auto-Clipper & Teaser Generator — converts long videos into viral short-form clips"
+name = "ai-shorts-clipper"
+version = "2.0.0"
+description = "Turn long videos and podcasts into vertical Shorts, Reels and TikToks on a CPU-only laptop"
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.10"
+# Same set as requirements-cpu.txt (CPU-only, no AGPL dependencies).
 dependencies = [
-    "yt-dlp[default]",
+    "yt-dlp",
+    "gdown",
     "faster-whisper",
+    "av<19",
     "google-genai",
     "openai>=2.6,<3",
     "httpx>=0.27,<1",
     "jsonschema>=4.23,<5",
+    "numpy<2.0.0",
     "mediapipe",
     "opencv-python",
     "Pillow",
@@ -20,9 +25,18 @@ dependencies = [
     "google-auth",
     "google-auth-oauthlib",
     "google-auth-httplib2",
-    "ultralytics",
-    "gdown",
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "pydantic",
+    "edge-tts",
 ]
 
-[project.scripts]
-clipping = "main:main"
+[project.optional-dependencies]
+# GPU features: YOLO face tracking (AGPL-3.0, check its license before
+# distributing), speaker diarization for split-screen / camera-switch.
+gpu = ["ultralytics", "pyannote.audio", "torch", "torchaudio"]
+test = ["pytest"]
+
+[project.urls]
+Repository = "https://github.com/Iftikhar050/ai-shorts-clipper"

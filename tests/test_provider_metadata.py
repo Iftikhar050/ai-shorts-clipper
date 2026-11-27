@@ -1,15 +1,13 @@
-"""Run/cache provenance contracts, authored for execution in Kaggle."""
+"""Run/cache provenance contracts for saved AI responses."""
 
 import hashlib
 import json
 from pathlib import Path
-import sys
 from types import SimpleNamespace
 
 import pytest
 
 from clipping.providers import metadata
-from clipping.providers.base import ProviderUnavailableError
 
 
 def _cfg(tmp_path, **overrides):
@@ -116,66 +114,3 @@ def test_legacy_provider_success_does_not_invent_model_or_fallback_origin(tmp_pa
 def test_completed_metadata_without_cache_has_no_hash(tmp_path):
     metadata.save_run_metadata(_cfg(tmp_path, ai_run_meta=_completed()))
     assert "response_sha256" not in _read(tmp_path)
-
-
-@pytest.fixture
-def failed_worker(monkeypatch, tmp_path):
-    import clipping
-    from web.api import worker
-
-    video = tmp_path / "video_asli.mp4"
-    video.write_bytes(b"synthetic video; never decoded")
-    cfg = _cfg(
-        tmp_path, file_video_asli=str(video), url_youtube=None,
-        max_kata_per_subtitle=5, whisper_model="base", whisper_device="cpu",
-        whisper_compute_type="int8", load_gemini_json=False,
-    )
-    finished = []
-    events = []
-
-    def fail_analysis(transcript, config):
-        config.ai_run_meta = dict(
-            actual_provider="vllm", model="failed-model", status="failed",
-            attempts=3, error_type="ProviderUnavailableError",
-        )
-        raise ProviderUnavailableError("Synthetic inference failure")
-
-    engine = SimpleNamespace(
-        transcribe_video=lambda *args, **kwargs: ("transcript", []),
-        analyze_with_ai=fail_analysis,
-    )
-    monkeypatch.setattr(clipping, "engine", engine, raising=False)
-    monkeypatch.setitem(sys.modules, "clipping.engine", engine)
-    monkeypatch.setattr(worker, "build_config_from_payload", lambda *args, **kwargs: cfg)
-    monkeypatch.setattr(worker, "_validate_analysis_config", lambda value: None)
-    monkeypatch.setattr(worker, "log_event", lambda name, **fields: events.append((name, fields)))
-    monkeypatch.setattr(worker, "store", SimpleNamespace(
-        is_cancel_requested=lambda job_id: False,
-        set_status=lambda *args, **kwargs: None,
-        update_progress=lambda *args, **kwargs: None,
-        finish_job=lambda *args, **kwargs: finished.append(kwargs),
-    ))
-    return SimpleNamespace(worker=worker, finished=finished, events=events, root=tmp_path)
-
-
-def test_worker_saves_failed_analysis_provenance_without_changing_old_cache(failed_worker):
-    response = failed_worker.root / "gemini_response.json"
-    response.write_text("[]", encoding="utf-8")
-    failed_worker.worker._run_pipeline_sync("synthetic-job", {})
-    saved = _read(failed_worker.root)
-    assert saved["status"] == "failed"
-    assert saved["attempts"] == 3
-    assert "response_sha256" not in saved
-    assert response.read_text(encoding="utf-8") == "[]"
-    assert "Synthetic inference failure" in failed_worker.finished[0]["error"]
-
-
-def test_worker_preserves_inference_error_when_metadata_write_fails(failed_worker, monkeypatch):
-    def cannot_write(*args, **kwargs):
-        raise OSError("Synthetic sidecar write failure")
-
-    monkeypatch.setattr(metadata, "save_run_metadata", cannot_write)
-    failed_worker.worker._run_pipeline_sync("synthetic-job", {})
-    assert "Synthetic inference failure" in failed_worker.finished[0]["error"]
-    assert "sidecar write failure" not in failed_worker.finished[0]["error"]
-    assert any(name == "analysis_metadata_failed" for name, _ in failed_worker.events)

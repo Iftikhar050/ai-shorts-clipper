@@ -6,6 +6,8 @@
 # --camera-switch, hybrid/split-screen YOLO tracking) are unavailable in this install.
 # Use the default MediaPipe face detector instead.
 yt-dlp
+# Google Drive links (--source gdrive)
+gdown
 faster-whisper
 # av 19 removed the `metadata_errors` argument that faster-whisper 1.2.1 passes
 # to av.open(), so Whisper crashes with TypeError while decoding audio.
