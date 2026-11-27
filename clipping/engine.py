@@ -54,6 +54,7 @@ def _build_ydl_format_selector(download_source_height: str | int) -> str:
 
 
 _PLATFORM_LABELS = {
+    "local": "Local file",
     "youtube": "YouTube",
     "tiktok": "TikTok",
     "instagram": "Instagram",
@@ -179,6 +180,19 @@ def download_video(
     """
     platform_label = _PLATFORM_LABELS.get(source_platform, source_platform)
     uses_youtube_format = source_platform == "youtube"
+
+    # --- Local file (uploads, your own recordings): copy, no download ---
+    if source_platform == "local":
+        import shutil
+
+        src = os.path.abspath(url)
+        if not os.path.isfile(src):
+            raise RuntimeError(f"❌ File video lokal tidak ditemukan: {url}")
+        print(f"[1/3] Memakai file video lokal: {os.path.basename(src)}")
+        if os.path.abspath(output_path) != src:
+            _remove_stale_source_files(output_path)
+            shutil.copyfile(src, output_path)
+        return None
 
     print(f"[1/3] Mendownload video dari {platform_label}...")
     _remove_stale_source_files(output_path)
@@ -526,8 +540,13 @@ def _build_account_section(cfg, lang: str) -> str:
 
 # ---- Retry Config ----
 MAX_ATTEMPTS = 10
-INITIAL_WAIT_SECONDS = 60
-WAIT_INCREMENT_SECONDS = 30
+INITIAL_WAIT_SECONDS = 20
+WAIT_INCREMENT_SECONDS = 20
+# "High demand" / quota errors on the primary model: after this many in a row,
+# switch to the fallback model instead of waiting out up to MAX_ATTEMPTS.
+OVERLOAD_SWITCH_AFTER = 2
+OVERLOAD_STATUS_CODES = {429, 503}
+FALLBACK_ATTEMPTS = 3
 REQUEST_TIMEOUT_MS = 15 * 60 * 1000  # 15 menit
 RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
 
@@ -560,9 +579,17 @@ def _is_retryable(exc: Exception) -> bool:
     return any(k in msg for k in keywords)
 
 
+def _is_overload(exc: Exception) -> bool:
+    if _extract_status_code(exc) in OVERLOAD_STATUS_CODES:
+        return True
+    msg = str(exc).lower()
+    return any(k in msg for k in ("high demand", "overloaded", "resource_exhausted", "unavailable"))
+
+
 def _generate_json_with_retry(client, model, fallback_model, contents, config):
     last_exc = None
     status_code = None
+    overloads = 0
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
@@ -593,31 +620,42 @@ def _generate_json_with_retry(client, model, fallback_model, contents, config):
             if (not retryable) or attempt == MAX_ATTEMPTS:
                 break
 
+            overloads = overloads + 1 if _is_overload(exc) else 0
+            if fallback_model and overloads >= OVERLOAD_SWITCH_AFTER:
+                print(f"[Gemini] Model utama sedang overload ({overloads}x berturut-turut); pindah ke fallback.")
+                break
+
             wait_seconds = INITIAL_WAIT_SECONDS + ((attempt - 1) * WAIT_INCREMENT_SECONDS)
             print(f"[Gemini] Retry lagi dalam {wait_seconds} detik...")
             time.sleep(wait_seconds)
 
     print(f"[Gemini] Percobaan dengan model utama ({model}) gagal.")
     if fallback_model:
-        print(f"[Gemini] Mencoba satu kali lagi dengan fallback model ({fallback_model})...")
-        try:
-            response = client.models.generate_content(
-                model=fallback_model,
-                contents=contents,
-                config=config,
-            )
-            text = getattr(response, "text", None)
-            if not text or not text.strip():
-                raise ValueError("Gemini fallback mengembalikan response.text kosong.")
+        exc_fallback = None
+        for f_attempt in range(1, FALLBACK_ATTEMPTS + 1):
+            print(f"[Gemini] Fallback model ({fallback_model}) attempt {f_attempt}/{FALLBACK_ATTEMPTS}...")
+            try:
+                response = client.models.generate_content(
+                    model=fallback_model,
+                    contents=contents,
+                    config=config,
+                )
+                text = getattr(response, "text", None)
+                if not text or not text.strip():
+                    raise ValueError("Gemini fallback mengembalikan response.text kosong.")
 
-            return json.loads(text)
-        except Exception as exc_fallback:
-            print(f"[Gemini] Fallback model gagal | error={exc_fallback}")
-            raise RuntimeError(
-                f"Gagal memanggil Gemini utama & fallback. "
-                f"Laporan Utama status={status_code}, error={last_exc} | "
-                f"Laporan Fallback error={exc_fallback}"
-            ) from exc_fallback
+                return json.loads(text)
+            except Exception as exc:
+                exc_fallback = exc
+                print(f"[Gemini] Fallback model gagal | error={exc}")
+                if not _is_retryable(exc) or f_attempt == FALLBACK_ATTEMPTS:
+                    break
+                time.sleep(INITIAL_WAIT_SECONDS)
+        raise RuntimeError(
+            f"Gagal memanggil Gemini utama & fallback. "
+            f"Laporan Utama status={status_code}, error={last_exc} | "
+            f"Laporan Fallback error={exc_fallback}"
+        ) from exc_fallback
 
     raise RuntimeError(
         f"Gagal memanggil Gemini setelah {MAX_ATTEMPTS} percobaan. Error terakhir: {last_exc}"
@@ -628,6 +666,13 @@ def _generate_json_with_retry(client, model, fallback_model, contents, config):
 # Ubah nilai di bawah ini jika ingin mengganti batas durasi klip (dalam detik)
 MIN_CLIP_DURATION = 20
 MAX_CLIP_DURATION = 179
+
+
+def _duration_bounds(cfg) -> tuple[int, int]:
+    """Clip length range from --clip-length / --min-duration / --max-duration."""
+    lo = getattr(cfg, "min_clip_duration", None) or MIN_CLIP_DURATION
+    hi = getattr(cfg, "max_clip_duration", None) or MAX_CLIP_DURATION
+    return int(lo), int(hi)
 
 def _wants_breakdown(cfg) -> bool:
     """The English prompt asks for the five component scores (score_breakdown)."""
@@ -663,6 +708,10 @@ def get_analysis_prompt(transkrip_lengkap: str, jumlah_clip: int, durasi_hook: i
     has_markers = any(m in transkrip_lengkap for m in ("[AUDIENCE:", "[CHAPTER at ", "[EVENT:"))
     signals_section = prompts.section(lang, "signals") if has_markers else ""
 
+    # Topic-guided clipping (--topic)
+    topic = (getattr(cfg, "topic", None) or "").strip()
+    focus_section = prompts.section(lang, "focus", topic=topic.replace('"', "'")) if topic else ""
+
     # Your best real-world clips (run_performance.py examples), English prompt only
     examples_section = ""
     if lang == "en" and getattr(cfg, "use_examples", True):
@@ -673,14 +722,15 @@ def get_analysis_prompt(transkrip_lengkap: str, jumlah_clip: int, durasi_hook: i
     return prompts.render_analysis_prompt(
         lang,
         clip_count=jumlah_clip,
-        min_duration=MIN_CLIP_DURATION,
-        max_duration=MAX_CLIP_DURATION,
+        min_duration=_duration_bounds(cfg)[0],
+        max_duration=_duration_bounds(cfg)[1],
         hook_duration=durasi_hook,
         account_section=_build_account_section(cfg, lang),
         hook_v2_section=hook_v2_section,
         segment_section=segment_section,
         signals_section=signals_section,
         examples_section=examples_section,
+        focus_section=focus_section,
         example_account=_ex_tipe,
         example_handle=_ex_akun,
         alt_account=_alt_tipe,
@@ -713,8 +763,8 @@ def analyze_with_vllm(transkrip_lengkap: str, cfg) -> list[dict]:
             build_clips_schema(_accounts_for(cfg), score_breakdown=_wants_breakdown(cfg)),
             transcript=transkrip_lengkap,
             requested_clips=cfg.jumlah_clip,
-            min_duration=MIN_CLIP_DURATION,
-            max_duration=MAX_CLIP_DURATION,
+            min_duration=_duration_bounds(cfg)[0],
+            max_duration=_duration_bounds(cfg)[1],
         )
 
 

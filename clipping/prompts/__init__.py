@@ -11,6 +11,7 @@ so JSON braces in the files need no escaping. Placeholders:
 
     clip_count, min_duration, max_duration, hook_duration, transcript,
     account_section, hook_v2_section, segment_section, signals_section, examples_section,
+    focus_section,
     example_account, example_handle, alt_account, alt_handle,
     output_language (English template only)
 """
@@ -62,6 +63,12 @@ SEGMENT-BASED TRIMMING (KEEP SEGMENTS — WAJIB):
             "tipe_akun HARUS salah satu dari nama akun di bawah ini, dan akun_tujuan HARUS handle akun tersebut:\n"
         ),
         "account_rules_header": "\n\nATURAN KHUSUS KLASIFIKASI:\n",
+        "focus": """
+
+FOKUS DARI USER (WAJIB):
+- User hanya ingin klip tentang: "$topic".
+- Pilih HANYA momen yang jelas membahas topik ini. Jika momen yang cocok lebih sedikit dari jumlah yang diminta, kembalikan lebih sedikit klip daripada memilih klip yang tidak relevan.
+- Setiap klip tetap wajib mengikuti semua aturan di bawah.""",
         "signals": """
 
 SINYAL AUDIENS (DATA PENONTON ASLI):
@@ -108,6 +115,12 @@ SEGMENT-BASED TRIMMING (KEEP SEGMENTS — REQUIRED):
             "tipe_akun MUST be one of the account names below, and akun_tujuan MUST be that account's handle:\n"
         ),
         "account_rules_header": "\n\nCLASSIFICATION TIE-BREAK RULES:\n",
+        "focus": """
+
+USER FOCUS (REQUIRED):
+- The user only wants clips about: "$topic".
+- Choose ONLY moments that are clearly about this topic. If fewer moments qualify than requested, return fewer clips rather than off-topic ones.
+- Every clip must still follow all the rules below.""",
         "signals": """
 
 AUDIENCE & EVENT SIGNALS (REAL VIEWER DATA + VIDEO ANALYSIS):

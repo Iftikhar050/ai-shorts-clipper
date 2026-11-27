@@ -53,6 +53,12 @@ def _print_banner(cfg, version, url, idx=None, total=None):
     provider = getattr(cfg, "ai_provider", "gemini")
     model = getattr(cfg, f"{provider}_model", "(cache)")
     print(f"   AI Provider : {provider} ({model})")
+    if getattr(cfg, "min_clip_duration", None):
+        print(f"   Clip Length : {cfg.min_clip_duration}-{cfg.max_clip_duration}s ({getattr(cfg, 'clip_length', '')})")
+    if getattr(cfg, "topic", None):
+        print(f"   Topic       : {cfg.topic}")
+    if getattr(cfg, "time_range", None):
+        print(f"   Time Range  : {cfg.time_range[0]:.0f}s - {cfg.time_range[1]:.0f}s")
     lang = getattr(cfg, "prompt_language", "en")
     out_lang = getattr(cfg, "output_language", "English") if lang == "en" else "ID + EN"
     print(f"   Prompt      : {lang}  (metadata: {out_lang})")
@@ -94,6 +100,25 @@ def _cleanup_source_video(cfg):
         os.remove(audio_path)
 
 
+def _print_render_summary(manifest, outputs_dir) -> int:
+    """Print per-clip results; return the process exit code (0 only if every clip rendered)."""
+    from clipping.runner import summarize_render
+
+    ok, failed, lines = summarize_render(manifest)
+    print(f"\n{'=' * 70}")
+    if ok and not failed:
+        print(f"✅ Selesai! {ok} klip berhasil dirender.")
+    elif ok:
+        print(f"⚠️ Selesai sebagian: {ok} berhasil, {failed} GAGAL.")
+    else:
+        print(f"❌ GAGAL: tidak ada klip yang berhasil dirender ({failed} gagal).")
+    for line in lines:
+        print(line)
+    print(f"   📁 Folder: {outputs_dir}")
+    print("=" * 70)
+    return 0 if ok and not failed else 1
+
+
 def _run_single_url(cfg, url, version, idx=None, total=None):
     """
     Run the full pipeline for a single URL.
@@ -131,11 +156,19 @@ def main():
     url_list = getattr(cfg, "url_list", [cfg.url_youtube] if isinstance(cfg.url_youtube, str) else cfg.url_youtube)
     is_batch = len(url_list) > 1
 
-    # ── Single URL Mode (backward-compatible) ────────────────────────
+    # ── Single URL Mode ──────────────────────────────────────────────
     if not is_batch:
-        _run_single_url(cfg, url_list[0], version)
-        print("\n✅ Selesai! Semua klip telah dirender.")
-        return
+        if getattr(cfg, "output_dir", None):
+            cfg.outputs_dir = os.path.abspath(cfg.output_dir)
+        elif not getattr(cfg, "flat_output", False):
+            # One folder per video, so the next run never overwrites these clips
+            slug = _make_url_slug(url_list[0], 0).replace("video_1_", "", 1)
+            cfg.outputs_dir = os.path.join(cfg.outputs_dir, slug)
+        if getattr(cfg, "output_dir", None) or not getattr(cfg, "flat_output", False):
+            os.makedirs(cfg.outputs_dir, exist_ok=True)
+            cfg.file_video_asli = os.path.join(cfg.outputs_dir, "video_asli.mp4")
+        manifest = _run_single_url(cfg, url_list[0], version)
+        sys.exit(_print_render_summary(manifest, cfg.outputs_dir))
 
     # ── Batch Multi-URL Mode ─────────────────────────────────────────
     base_outputs_dir = cfg.outputs_dir
@@ -201,18 +234,27 @@ def main():
                 _cleanup_source_video(url_cfg)
 
             elapsed = time.time() - t_start
-            clip_count = len(manifest) if manifest else 0
+            from clipping.runner import summarize_render
+
+            clip_count, clip_failed, _ = summarize_render(manifest)
+            status = "success" if clip_count and not clip_failed else ("partial" if clip_count else "failed")
             all_manifests.append({
                 "index": idx + 1,
                 "url": url,
                 "slug": slug,
                 "output_dir": url_cfg.outputs_dir,
-                "status": "success",
+                "status": status,
                 "clips_rendered": clip_count,
+                "clips_failed": clip_failed,
                 "duration_seconds": round(elapsed, 1),
                 "manifest": manifest,
             })
-            print(f"\n✅ [{idx + 1}/{total}] Selesai — {clip_count} clip(s) rendered in {elapsed:.0f}s")
+            if status != "success":
+                errors.append({"index": idx + 1, "url": url,
+                               "error": f"{clip_failed} clip(s) failed, {clip_count} rendered"})
+            icon = "✅" if status == "success" else ("⚠️" if status == "partial" else "❌")
+            print(f"\n{icon} [{idx + 1}/{total}] {status.upper()} — {clip_count} rendered, "
+                  f"{clip_failed} failed in {elapsed:.0f}s")
 
         except Exception as e:
             elapsed = time.time() - t_start
@@ -234,7 +276,7 @@ def main():
     # ── Batch Summary ────────────────────────────────────────────────
     total_elapsed = time.time() - t_batch_start
     success_count = sum(1 for m in all_manifests if m["status"] == "success")
-    fail_count = sum(1 for m in all_manifests if m["status"] == "failed")
+    fail_count = sum(1 for m in all_manifests if m["status"] != "success")
 
     # Save combined batch manifest
     batch_manifest_path = os.path.join(base_outputs_dir, "batch_manifest.json")
@@ -262,6 +304,7 @@ def main():
     print(f"   ⏱️ Total Time: {total_elapsed:.0f}s")
     print(f"   📄 Manifest  : {batch_manifest_path}")
     print(f"{'=' * 70}")
+    sys.exit(0 if fail_count == 0 else 1)
 
 
 if __name__ == "__main__":

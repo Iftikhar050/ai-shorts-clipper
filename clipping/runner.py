@@ -10,7 +10,59 @@ import json
 import os
 
 from . import diarization as diarization_mod
-from . import engine, metadata, scoring, studio, hook_manager, voiceover
+from . import engine, metadata, scoring, selection, studio, hook_manager, voiceover
+
+
+PROGRESS_PREFIX = "@@PROGRESS "
+
+
+def _progress(stage: str, **data) -> None:
+    """One machine-readable progress line for the web app (app/server.py)."""
+    print(PROGRESS_PREFIX + json.dumps({"stage": stage, **data}, ensure_ascii=False), flush=True)
+
+
+def _render_with_retry(klip, file_glitch_ts, data_segmen, cfg, video_encoder, diarization_data):
+    """Render one clip, retrying failures; normalize loudness on success."""
+    retries = max(0, int(getattr(cfg, "render_retries", 1)))
+    result = None
+    for attempt in range(retries + 1):
+        if attempt:
+            print(f"🔁 [Rank {klip['rank']}] Render gagal, mencoba lagi ({attempt}/{retries})...")
+        result = studio.proses_klip(
+            klip["rank"], klip, cfg.pilihan_rasio, file_glitch_ts, data_segmen, cfg,
+            video_encoder, diarization_data=diarization_data,
+        )
+        if result and result.get("status") == "success":
+            break
+    if result:
+        result["render_attempts"] = attempt + 1
+        if result.get("status") == "success" and getattr(cfg, "loudnorm", False):
+            from . import postprocess
+
+            ok = postprocess.normalize_loudness(result.get("video_path", ""))
+            result["loudness_normalized"] = ok
+            if not ok:
+                print(f"   ⚠️ [Rank {klip['rank']}] Normalisasi loudness gagal; klip asli dipertahankan.")
+    return result
+
+
+def summarize_render(manifest: list[dict] | None) -> tuple[int, int, list[str]]:
+    """(succeeded, failed, report lines) for a render manifest.
+
+    A clip only counts as rendered when its status is "success" AND the video
+    file exists on disk.
+    """
+    ok, failed, lines = 0, 0, []
+    for row in manifest or []:
+        rendered = row.get("status") == "success" and os.path.exists(row.get("video_path", ""))
+        if rendered:
+            ok += 1
+            lines.append(f"   ✅ #{row.get('rank')}  {row.get('duration', '?')}s  {row.get('video_path')}")
+        else:
+            failed += 1
+            reason = row.get("error") or ("video file missing" if row.get("status") == "success" else "unknown error")
+            lines.append(f"   ❌ #{row.get('rank')}  FAILED: {str(reason).strip().splitlines()[-1][:200]}")
+    return ok, failed, lines
 
 
 def _visual_review_enabled(cfg) -> bool:
@@ -97,6 +149,7 @@ def run_pipeline(cfg, whisper_model_instance=None) -> list[dict]:
 
     # Step 1 — Download
     source_platform = getattr(cfg, "source_platform", "youtube")
+    _progress("download")
     video_info = engine.download_video(
         cfg.url_youtube,
         cfg.file_video_asli,
@@ -108,6 +161,7 @@ def run_pipeline(cfg, whisper_model_instance=None) -> list[dict]:
     )
 
     # Step 2 — Transcribe
+    _progress("transcribe")
     transkrip_lengkap = ""
     data_segmen = []
 
@@ -143,14 +197,24 @@ def run_pipeline(cfg, whisper_model_instance=None) -> list[dict]:
         )
 
     # Step 2b — Audience signals (YouTube heatmap / chapters / comments)
+    _progress("signals")
     signals = _collect_signals(cfg, video_info, source_platform)
     transkrip_ai = scoring.annotate_transcript(transkrip_lengkap, signals)
+    time_range = getattr(cfg, "time_range", None)
+    if time_range:
+        transkrip_ai = selection.filter_transcript(transkrip_ai, time_range)
+        if not transkrip_ai.strip():
+            raise ValueError(
+                f"--time-range {time_range[0]:.0f}-{time_range[1]:.0f}s contains no speech in the transcript."
+            )
+        print(f"⏱️ Hanya menganalisis {time_range[0]:.0f}s-{time_range[1]:.0f}s dari video (--time-range).")
     visual_on = _visual_review_enabled(cfg)
     pool = scoring.candidate_pool(cfg.jumlah_clip, signals, force=visual_on)
     if pool != cfg.jumlah_clip:
         print(f"📊 Meminta {pool} kandidat klip ke AI, lalu memilih {cfg.jumlah_clip} terbaik dengan skor gabungan.")
 
     # Step 3 — Gemini AI analysis
+    _progress("analyze", candidates=pool)
     gemini_output_path = os.path.join(cfg.outputs_dir, "gemini_response.json")
 
     if getattr(cfg, "load_gemini_json", False) and os.path.exists(gemini_output_path):
@@ -183,9 +247,14 @@ def run_pipeline(cfg, whisper_model_instance=None) -> list[dict]:
     # Step 3b — Score breakdown + combined score with audience signals
     if isinstance(hasil_json, list):
         hasil_json = scoring.apply_score_breakdown(hasil_json)
+        lo, hi = engine._duration_bounds(cfg)
+        hasil_json, rejected = selection.enforce_duration(hasil_json, lo, hi, keep=cfg.jumlah_clip)
+        for c in rejected:
+            print(f"   ✂️ Kandidat {c.get('start_time')}-{c.get('end_time')}s dibuang: di luar panjang {lo}-{hi}s.")
     if isinstance(hasil_json, list) and visual_on and hasil_json:
         from . import visual
 
+        _progress("visual", candidates=len(hasil_json))
         try:
             n = visual.score_candidates(
                 hasil_json, cfg.file_video_asli, transkrip_lengkap, cfg, engine._generate_json_with_retry
@@ -342,20 +411,15 @@ def run_pipeline(cfg, whisper_model_instance=None) -> list[dict]:
             except Exception as e:
                 print(f"   ⚠️ Gagal generate voice-over untuk Rank {klip['rank']}: {e}")
 
-    for klip in sorted(hasil_json, key=lambda x: x["rank"]):
-        
+    ordered = sorted(hasil_json, key=lambda x: x["rank"])
+    for index, klip in enumerate(ordered, 1):
+        _progress("render", clip=index, total=len(ordered), rank=klip["rank"])
+
         if custom_hook_path:
             klip["custom_hook_info"] = {"file_path": custom_hook_path}
 
-        hasil_render = studio.proses_klip(
-            klip["rank"],
-            klip,
-            cfg.pilihan_rasio,
-            file_glitch_ts,
-            data_segmen,
-            cfg,
-            video_encoder,
-            diarization_data=diarization_data,
+        hasil_render = _render_with_retry(
+            klip, file_glitch_ts, data_segmen, cfg, video_encoder, diarization_data
         )
         if hasil_render:
             render_manifest.append(hasil_render)
@@ -374,6 +438,8 @@ def run_pipeline(cfg, whisper_model_instance=None) -> list[dict]:
     print(
         f"\n💾 Render manifest disimpan ke {manifest_path} ({len(render_manifest)} item)"
     )
+    ok, failed, _ = summarize_render(render_manifest)
+    _progress("done", rendered=ok, failed=failed)
 
 
     return render_manifest

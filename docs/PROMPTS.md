@@ -30,8 +30,8 @@ use them. With the English template they hold text in your output language:
 
 | Field | Meaning in the English template |
 |---|---|
-| `title_indonesia` | Short title, also the **thumbnail headline** |
-| `title_inggris` | Main platform title (YouTube) |
+| `title_indonesia` | Short title (fallback when `title_inggris` is empty) |
+| `title_inggris` | Main platform title (YouTube), also the **thumbnail headline** |
 | `tiktok_title_id` | Longer, descriptive TikTok title |
 | `tiktok_caption_id` | Alternative TikTok caption |
 

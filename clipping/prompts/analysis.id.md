@@ -8,7 +8,7 @@ TUGAS UTAMA:
 - Carikan ${clip_count} momen paling menarik, paling kuat, paling shareable, dan paling berpotensi viral untuk dijadikan klip pendek.
 - Urutkan klip berdasarkan viral_score tertinggi (paling berpotensi viral) ke terendah. Peringkat ("rank") hanya sebagai nomor urut (1, 2, 3...).
 - Untuk setiap klip, hasilkan timing klip, hook, typography plan, b-roll plan, alasan pemilihan, metadata lintas platform, dan klasifikasi akun tujuan.
-- Semua output harus sangat relevan dengan isi klip, bukan isi video penuh secara umum.
+- Semua output harus sangat relevan dengan isi klip, bukan isi video penuh secara umum.${focus_section}
 
 ATURAN PEMILIHAN KLIP & VIRAL-BILITY:
 - Durasi klip harus ${min_duration}-${max_duration} detik.

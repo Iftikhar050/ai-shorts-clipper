@@ -167,6 +167,19 @@ GEMINI_FALLBACK_MODEL = "gemini-2.5-flash"
 # ==============================================================================
 
 
+def is_placeholder_key(value: str | None) -> bool:
+    """True for empty values and .env.sample placeholders like 'your-...-here'."""
+    lowered = (value or "").strip().lower()
+    return (not lowered or lowered.startswith("your-") or lowered.endswith("-here")
+            or lowered in {"changeme", "xxx", "none"})
+
+
+def _env_key(name: str) -> str:
+    """API key from the environment; .env.sample placeholders count as not set."""
+    value = os.environ.get(name, "").strip()
+    return "" if is_placeholder_key(value) else value
+
+
 def _make_url_slug(url: str, index: int) -> str:
     """Generate a short, filesystem-safe slug from a URL for output isolation."""
     video_id = ""
@@ -241,7 +254,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--source",
-        choices=["youtube", "tiktok", "instagram", "gdrive"],
+        choices=["youtube", "tiktok", "instagram", "gdrive", "local"],
         default=SOURCE_PLATFORM,
         help="Video source platform. Determines download behavior and subtitle availability.",
     )
@@ -517,6 +530,47 @@ def _build_parser() -> argparse.ArgumentParser:
         "--no-scene-detect",
         action="store_true",
         help="Keep volume-spike detection but skip scene-cut detection (saves a video decode pass).",
+    )
+    p.add_argument(
+        "--output-dir",
+        default=None,
+        help="Write this video's clips to this folder (single video only). "
+             "Default: outputs/<video-id>/.",
+    )
+    p.add_argument(
+        "--clip-length",
+        choices=["short", "medium", "long", "any"],
+        default="medium",
+        help="Target clip length: short 15-30s, medium 30-60s (default), long 60-90s, any 20-179s (original).",
+    )
+    p.add_argument("--min-duration", type=int, default=None, help="Override the minimum clip length (seconds).")
+    p.add_argument("--max-duration", type=int, default=None, help="Override the maximum clip length (seconds).")
+    p.add_argument(
+        "--topic",
+        default=None,
+        help='Only make clips about this topic, e.g. --topic "sleep and dopamine".',
+    )
+    p.add_argument(
+        "--time-range",
+        default=None,
+        help="Only clip from this part of the video, e.g. --time-range 2:00-10:30.",
+    )
+    p.add_argument(
+        "--no-loudnorm",
+        action="store_true",
+        help="Skip loudness normalization of finished clips (default: normalize to -14 LUFS).",
+    )
+    p.add_argument(
+        "--render-retries",
+        type=int,
+        default=1,
+        help="Retry a clip whose render failed this many times (default: 1).",
+    )
+    p.add_argument(
+        "--flat-output",
+        action="store_true",
+        help="Write a single video's clips directly into outputs/ (old behaviour) instead of "
+             "outputs/<video-id>/. The next run will overwrite them.",
     )
     p.add_argument(
         "--no-examples",
@@ -888,6 +942,14 @@ def build_config(argv: list[str] | None = None) -> SimpleNamespace:
         score_weights = parse_weights(args.score_weights)
     except ValueError as exc:
         parser.error(str(exc))
+    from clipping.selection import parse_time_range, resolve_lengths
+    try:
+        min_clip, max_clip = resolve_lengths(args.clip_length, args.min_duration, args.max_duration)
+        time_range = parse_time_range(args.time_range)
+    except ValueError as exc:
+        parser.error(str(exc))
+    if not (0 <= args.render_retries <= 3):
+        parser.error("--render-retries must be between 0 and 3.")
     if not (1 <= args.visual_frames <= 12):
         parser.error("--visual-frames must be between 1 and 12.")
     if args.max_comments < 1:
@@ -920,11 +982,14 @@ def build_config(argv: list[str] | None = None) -> SimpleNamespace:
             os.path.join(base_dir, f"face_yolov{args.yolo_size}.pt")
         ),
         # API keys (from env)
-        api_key_gemini=os.environ.get("GOOGLE_API_KEY", ""),
-        hf_token=os.environ.get("HF_TOKEN", ""),
-        pexels_api_key=os.environ.get("PEXELS_API_KEY", ""),
+        api_key_gemini=_env_key("GOOGLE_API_KEY"),
+        hf_token=_env_key("HF_TOKEN"),
+        pexels_api_key=_env_key("PEXELS_API_KEY"),
         # Pengaturan utama
-        source_platform="tiktok" if args.tiktok else args.source,
+        source_platform=(
+            "local" if len(url_list) == 1 and os.path.isfile(url_list[0])
+            else ("tiktok" if args.tiktok else args.source)
+        ),
         url_youtube=url_list[0] if len(url_list) == 1 else url_list,
         url_list=url_list,
         yt_cookies=args.yt_cookies,
@@ -992,7 +1057,7 @@ def build_config(argv: list[str] | None = None) -> SimpleNamespace:
         whisper_compute_type=args.whisper_compute_type,
         # AI
         ai_provider=args.ai_provider,
-        api_key_nvidia=os.environ.get("NVIDIA_API_KEY", ""),
+        api_key_nvidia=_env_key("NVIDIA_API_KEY"),
         nvidia_model=args.nvidia_model,
         gemini_model=args.gemini_model,
         gemini_fallback_model=args.gemini_fallback_model,
@@ -1007,6 +1072,15 @@ def build_config(argv: list[str] | None = None) -> SimpleNamespace:
         event_markers=not args.no_event_markers,
         scene_detect=not args.no_scene_detect,
         use_examples=not args.no_examples,
+        flat_output=args.flat_output,
+        output_dir=args.output_dir,
+        clip_length=args.clip_length,
+        min_clip_duration=min_clip,
+        max_clip_duration=max_clip,
+        topic=(args.topic or "").strip() or None,
+        time_range=time_range,
+        loudnorm=not args.no_loudnorm,
+        render_retries=args.render_retries,
         visual_rerank=args.visual_rerank,
         visual_frames=args.visual_frames,
         use_comments=args.use_comments,

@@ -8,7 +8,7 @@ MAIN TASK:
 - Find the ${clip_count} most interesting, strongest, most shareable moments with the highest viral potential to turn into short clips.
 - Sort clips by viral_score, highest (most viral potential) to lowest. "rank" is only the order number (1, 2, 3...).
 - For each clip, produce: clip timing, hook, typography plan, b-roll plan, selection reason, cross-platform metadata and target-account classification.
-- All output must be specific to the content of the clip, not the full video in general.
+- All output must be specific to the content of the clip, not the full video in general.${focus_section}
 
 CLIP SELECTION & VIRALITY RULES:
 - Clip duration must be ${min_duration}-${max_duration} seconds.
