@@ -57,7 +57,9 @@ def test_build_command_maps_options_to_cli_flags(tmp_path):
     o = J.validate_options({"clips": 4, "topic": "money; rm -rf /", "time_range": "1:00-2:00", "visual_rerank": True,
                             "karaoke": False, "hook": False, "broll": True, "loudnorm": False})
     cmd = J.build_command("https://youtu.be/abcdefghijk", o, str(tmp_path), {"whisper_model": "base"})
-    assert cmd[0] == sys.executable and cmd[2].endswith("main.py")
+    assert cmd[0] == J.pipeline_python() and cmd[2].endswith("main.py")
+    if (Path(J.ROOT) / ".venv").is_dir():
+        assert ".venv" in cmd[0]  # jobs never run the pipeline with a global Python
     pairs = dict(zip(cmd[3::1], cmd[4::1]))
     assert pairs["--url"] == "https://youtu.be/abcdefghijk" and pairs["--output-dir"] == str(tmp_path)
     assert pairs["--clips"] == "4" and pairs["--topic"] == "money; rm -rf /"   # one argv item, no shell

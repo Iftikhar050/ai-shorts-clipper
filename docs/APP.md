@@ -4,12 +4,24 @@ A local interface for the clipper: paste a link (or drop a video), pick a few
 options, watch progress, then preview, download and copy captions for every
 clip.
 
+Double-click **`Start Shorts Clipper.bat`** in the project folder, or run:
+
 ```
-.\.venv\Scripts\python.exe run_app.py
+python run_app.py
 ```
 
-It opens <http://127.0.0.1:8765>. Use `--port 9000` to change the port and
-`--no-browser` to skip opening a tab. Stop it with Ctrl+C.
+It opens <http://127.0.0.1:8765>. **Keep that window open** while you use the
+app: the page only works while the server is running. Close the window (or
+Ctrl+C) to stop it. Use `--port 9000` to change the port and `--no-browser` to
+skip opening a tab.
+
+Any `python` works: the app restarts itself with the project's `.venv`, which
+has the pipeline's packages (starting it with a global Python used to make the
+Projects list fail).
+
+**Page won't load?** The server isn't running: start it again. **"Could not
+start on port 8765"?** It's already running in another window: just open the
+link.
 
 The app listens on **127.0.0.1 only** (this computer). It has no login, so
 don't expose it to a network.

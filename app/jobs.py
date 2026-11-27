@@ -24,6 +24,15 @@ DATA_DIR = os.path.join(ROOT, "app", "data")
 OUTPUTS_DIR = os.path.join(ROOT, "outputs")
 PROGRESS_PREFIX = "@@PROGRESS "
 
+
+def pipeline_python() -> str:
+    """The project's .venv Python (has Whisper, OpenCV...); falls back to this interpreter."""
+    for rel in (("Scripts", "python.exe"), ("bin", "python")):
+        candidate = os.path.join(ROOT, ".venv", *rel)
+        if os.path.isfile(candidate):
+            return candidate
+    return sys.executable
+
 # Fixed machine settings (overridable in app/data/settings.json via the UI)
 DEFAULT_SETTINGS = {
     "gemini_model": "gemini-3.5-flash",
@@ -127,7 +136,7 @@ def build_command(source: str, options: dict, output_dir: str, settings: dict | 
     """argv for main.py. A list (no shell), so nothing in the options is interpreted."""
     s = {**DEFAULT_SETTINGS, **(settings or {})}
     cmd = [
-        sys.executable, "-u", os.path.join(ROOT, "main.py"),
+        pipeline_python(), "-u", os.path.join(ROOT, "main.py"),
         "--url", source,
         "--output-dir", output_dir,
         "--clips", str(options["clips"]),
@@ -338,7 +347,7 @@ class JobRunner:
 
     def _finish(self, job_id: str, code: int):
         job = self.store.get(job_id)
-        from clipping.runner import summarize_render
+        from clipping.results import summarize_render
 
         manifest = _read_json(os.path.join(job["output_dir"], "render_manifest.json")) or []
         ok, failed, _ = summarize_render(manifest if isinstance(manifest, list) else [])

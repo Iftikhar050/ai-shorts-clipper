@@ -289,7 +289,7 @@ def _discover_cli_runs(known: set) -> list[dict]:
     out = []
     if not os.path.isdir(J.OUTPUTS_DIR):
         return out
-    from clipping.runner import summarize_render
+    from clipping.results import summarize_render
 
     for name in sorted(os.listdir(J.OUTPUTS_DIR)):
         folder = os.path.join(J.OUTPUTS_DIR, name)
