@@ -50,3 +50,6 @@ video_asli.*
 # Performance tracking (personal data)
 performance.sqlite3
 clipping/prompts/top_examples.json
+
+# Web app local data (jobs, logs, uploads, settings)
+app/data/
